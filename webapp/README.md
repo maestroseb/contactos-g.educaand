@@ -11,6 +11,22 @@ Apps Script** con dos vistas según quién entre:
 > Este directorio es un **proyecto standalone independiente**; los archivos `.gs`
 > del proyecto de hoja siguen en la raíz del repo como referencia.
 
+## Control de acceso (importante)
+
+`g.educaand.es` es el dominio de **todo el profesorado andaluz**, no solo de un
+centro. Por eso el acceso NO se controla solo por dominio:
+
+- La web se despliega con acceso **de dominio** (necesario para la app "Interna"
+  sin verificación), pero el **portero real está en `doGet`**: comprueba la
+  pertenencia al **grupo de Google del profesorado** del centro (el correo de
+  `⚙️ Configuración!D4`). Quien no pertenezca ve una página de *acceso denegado*.
+- Ese grupo lo **administra la persona admin**: añadir/quitar a alguien del grupo
+  es lo que le da o le quita el acceso.
+- Cuando alguien sale del claustro (del grupo), la **sincronización diaria** se
+  detiene sola y se le avisa por correo (`SincronizacionDiaria.gs`).
+
+Es el mismo comportamiento que la hoja madre/hija: manda la pertenencia al grupo.
+
 ## Estructura
 
 | Archivo | Papel |
@@ -23,6 +39,7 @@ Apps Script** con dos vistas según quién entre:
 | `Contactos.gs` | Núcleo People API: crear/actualizar/traer/eliminar |
 | `SincronizacionDiaria.gs` | Disparador diario por usuario (desatendido) |
 | `Index.html` | Shell de la página |
+| `AccesoDenegado.html` | Página para quien no pertenece al claustro |
 | `Estilos.html` | CSS (claro/oscuro) |
 | `Usuario.html` / `Admin.html` | Vistas (definen `window.VISTA.render`) |
 | `Cliente.html` | Arranque y utilidades del cliente |

@@ -3,10 +3,31 @@
  * Sustituye a onOpen()/menús del proyecto de hoja por doGet() + HTML.
  */
 
-/** Servido al abrir la URL de la web app. */
+/**
+ * Servido al abrir la URL de la web app.
+ *
+ * PORTERO: aunque la app es accesible por todo el dominio g.educaand.es (todo
+ * el profesorado andaluz), aquí se comprueba la pertenencia al GRUPO del
+ * profesorado del centro (el que administra el admin). Quien no pertenezca a
+ * este claustro NO entra — igual que en la hoja madre/hija.
+ */
 function doGet(e) {
   const email = correoUsuarioActual_();
   const esAdmin = esAdministrador_(email);
+  const correoGrupo = correoGrupoProfesorado_();
+  // esMiembroDelGrupo_ devuelve true si no hay grupo configurado (sin restricción).
+  const esMiembro = esMiembroDelGrupo_(email, correoGrupo);
+
+  // Sin acceso: no es admin y no pertenece al claustro -> puerta cerrada.
+  if (!esAdmin && !esMiembro) {
+    const denegado = HtmlService.createTemplateFromFile('AccesoDenegado');
+    denegado.email = email;
+    denegado.nombreCentro = nombreCentro_();
+    denegado.nombreApp = PARAMS.nombreApp;
+    return denegado.evaluate()
+      .setTitle(PARAMS.icono + ' ' + PARAMS.nombreApp)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
 
   const plantilla = HtmlService.createTemplateFromFile('Index');
   plantilla.esAdmin = esAdmin;

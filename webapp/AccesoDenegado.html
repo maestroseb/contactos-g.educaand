@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <?!= include('Estilos') ?>
+</head>
+<body>
+  <div class="top">
+    <span style="font-size:22px">🔒</span>
+    <h1><?= nombreApp ?></h1>
+    <span class="who"><?= email ?></span>
+  </div>
+  <main>
+    <div class="card">
+      <h2>No perteneces a este claustro</h2>
+      <p class="desc" style="margin-bottom:10px">
+        Esta aplicación es para el profesorado del
+        <b><?= nombreCentro ? nombreCentro : 'centro' ?></b>.
+        Tu cuenta (<b><?= email ?></b>) no figura en el grupo del profesorado que
+        administra el centro, así que no puedes acceder ni sincronizar sus contactos.
+      </p>
+      <p class="note">
+        Si crees que es un error o te acabas de incorporar, ponte en contacto con la
+        persona administradora del centro para que te añada al grupo del profesorado.
+      </p>
+    </div>
+  </main>
+</body>
+</html>
