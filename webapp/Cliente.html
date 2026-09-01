@@ -1,0 +1,45 @@
+<script>
+/** Utilidades compartidas por las vistas. */
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+function setStatus(el, texto, clase) {
+  if (!el) return;
+  el.textContent = texto;
+  el.className = 'status' + (clase ? ' ' + clase : '');
+}
+function mensajeError(e) {
+  var m = (e && e.message) ? e.message : String(e);
+  if (m.indexOf('NO_MIEMBRO') !== -1) {
+    return 'No puedes sincronizar los contactos del centro porque no perteneces al grupo del profesorado.';
+  }
+  if (m.indexOf('NO_AUTORIZADO') !== -1) return 'No tienes permisos de administrador.';
+  return 'Se ha producido un error: ' + m;
+}
+
+/** Arranque: carga el estado y deja que la vista incluida se monte. */
+document.addEventListener('DOMContentLoaded', function () {
+  google.script.run
+    .withSuccessHandler(function (estado) {
+      document.getElementById('tituloApp').textContent = estado.nombreApp;
+      document.getElementById('quien').textContent = estado.email || '';
+      var badge = document.getElementById('badgeRol');
+      badge.hidden = false;
+      badge.textContent = estado.esAdmin ? 'Administrador' : 'Profesorado';
+
+      if (window.VISTA && typeof window.VISTA.render === 'function') {
+        window.VISTA.render(estado);
+      } else {
+        document.getElementById('app').innerHTML =
+          '<div class="card"><p class="status err">No se pudo cargar la vista.</p></div>';
+      }
+    })
+    .withFailureHandler(function (e) {
+      document.getElementById('app').innerHTML =
+        '<div class="card"><p class="status err">' + esc(mensajeError(e)) + '</p></div>';
+    })
+    .getEstadoInicial();
+});
+</script>

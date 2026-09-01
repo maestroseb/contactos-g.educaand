@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <?!= include('Estilos') ?>
+</head>
+<body>
+  <div class="top">
+    <span style="font-size:22px">👥</span>
+    <h1 id="tituloApp">Asistente de Contactos</h1>
+    <span id="badgeRol" class="badge" hidden></span>
+    <span class="who" id="quien"></span>
+  </div>
+
+  <main id="app">
+    <div class="card"><p class="muted">Cargando…</p></div>
+  </main>
+
+  <!-- Vista elegida en el servidor según el rol: 'Admin' o 'Usuario' -->
+  <?!= include(vista) ?>
+  <?!= include('Cliente') ?>
+</body>
+</html>

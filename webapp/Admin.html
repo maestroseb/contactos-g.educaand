@@ -1,0 +1,68 @@
+<script>
+/**
+ * Vista del ADMINISTRADOR. De momento (Fase 2) muestra en solo lectura la
+ * pestaña "⬆️ Datos" de la hoja central y el estado del sistema. La edición
+ * en línea llega en la Fase 4 (adminGuardarDatos en WebApp.gs).
+ */
+window.VISTA = {
+  render: function (estado) {
+    var app = document.getElementById('app');
+    app.innerHTML = [
+      '<div class="card">',
+        '<h2>Panel del administrador</h2>',
+        '<p class="desc">Gestionas la lista central del ',
+        (estado.nombreCentro ? '<b>' + esc(estado.nombreCentro) + '</b>' : 'centro'),
+        '. Estos datos son los que sincroniza todo el claustro.</p>',
+        '<p class="note">🚧 La edición en línea llega en la Fase 4. Por ahora se muestra la lista central en solo lectura.</p>',
+        '<div class="row" style="margin-top:12px"><button class="primary" id="btnCargar">Cargar lista central</button></div>',
+        '<p class="status" id="stAdmin"></p>',
+        '<div id="tablaDatos"></div>',
+      '</div>',
+
+      '<div class="card">',
+        '<h2>Tu propia sincronización</h2>',
+        '<p class="desc">Como administrador también puedes sincronizar en tu cuenta. Recarga usando la vista de profesorado cuando esté disponible el conmutador de vistas (Fase 4).</p>',
+        '<div class="row"><button class="primary" id="btnSyncMia">🔁 Sincronizar el centro en mi cuenta</button></div>',
+        '<p class="status" id="stMia"></p>',
+      '</div>'
+    ].join('');
+
+    document.getElementById('btnCargar').onclick = function () {
+      var st = document.getElementById('stAdmin');
+      setStatus(st, 'Cargando…', '');
+      this.disabled = true;
+      var btn = this;
+      google.script.run
+        .withSuccessHandler(function (filas) { btn.disabled = false; pintar(filas); setStatus(st, (filas.length - 1) + ' filas.', 'ok'); })
+        .withFailureHandler(function (e) { btn.disabled = false; setStatus(st, mensajeError(e), 'err'); })
+        .adminLeerDatos();
+    };
+
+    document.getElementById('btnSyncMia').onclick = function () {
+      var st = document.getElementById('stMia');
+      setStatus(st, 'Sincronizando…', '');
+      this.disabled = true;
+      var btn = this;
+      google.script.run
+        .withSuccessHandler(function (r) {
+          btn.disabled = false;
+          setStatus(st, 'Hecho: ' + r.creados + ' creados, ' + r.actualizados + ' actualizados.', 'ok');
+        })
+        .withFailureHandler(function (e) { btn.disabled = false; setStatus(st, mensajeError(e), 'err'); })
+        .sincronizarAhora({ incluirCentro: true, incluirPropios: false });
+    };
+
+    function pintar(filas) {
+      var cont = document.getElementById('tablaDatos');
+      if (!filas || filas.length < 2) { cont.innerHTML = '<p class="muted">La lista central está vacía.</p>'; return; }
+      var cab = filas[0];
+      cont.innerHTML = '<div class="tablewrap"><table><thead><tr>' +
+        cab.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') +
+        '</tr></thead><tbody>' +
+        filas.slice(1).map(function (f) {
+          return '<tr>' + f.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+  }
+};
+</script>

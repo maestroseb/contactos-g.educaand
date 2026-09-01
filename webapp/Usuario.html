@@ -1,0 +1,123 @@
+<script>
+/**
+ * Vista del PROFESORADO. Define window.VISTA.render(estado), que Cliente.html
+ * invoca tras cargar el estado inicial. Toda acción usa google.script.run.
+ */
+window.VISTA = {
+  render: function (estado) {
+    var app = document.getElementById('app');
+    var grupos = estado.gruposCentro || [];
+
+    app.innerHTML = [
+      '<div class="card">',
+        '<h2>Sincronizar los contactos del centro</h2>',
+        '<p class="desc">Se añadirán a tu cuenta de Google Contacts los contactos del ',
+        (estado.nombreCentro ? '<b>' + esc(estado.nombreCentro) + '</b>' : 'centro'),
+        '. Elige qué grupos quieres sincronizar (si no marcas ninguno, se sincronizan todos).</p>',
+        '<div class="groups" id="grupos">',
+          grupos.map(function (g, i) {
+            return '<label><input type="checkbox" value="' + esc(g) + '"> ' + esc(g) + '</label>';
+          }).join('') || '<span class="muted">El administrador aún no ha cargado grupos.</span>',
+        '</div>',
+        '<div class="row">',
+          '<button class="primary" id="btnSyncCentro">🔁 Sincronizar contactos del centro</button>',
+        '</div>',
+        '<p class="status" id="stCentro"></p>',
+      '</div>',
+
+      '<div class="card">',
+        '<h2>Sincronización diaria automática</h2>',
+        '<p class="desc">Si la activas, tus contactos se actualizarán solos cada noche sin que hagas nada.</p>',
+        '<div class="switch">',
+          '<button id="btnDiaria" class="' + (estado.diariaActiva ? 'danger' : 'primary') + '">',
+            (estado.diariaActiva ? '🔴 Desactivar sincronización diaria' : '🟢 Activar sincronización diaria'),
+          '</button>',
+          '<span class="status" id="stDiaria">' + (estado.diariaActiva ? 'Activada' : 'Desactivada') + '</span>',
+        '</div>',
+      '</div>',
+
+      '<div class="card">',
+        '<h2>Mis contactos</h2>',
+        '<p class="desc">Trae tus contactos actuales de Google para revisarlos o eliminarlos.</p>',
+        '<div class="row"><button id="btnTraer">👥 Traer mis contactos</button></div>',
+        '<p class="status" id="stMis"></p>',
+        '<div id="tablaMis"></div>',
+      '</div>'
+    ].join('');
+
+    // --- Sincronizar contactos del centro ---
+    document.getElementById('btnSyncCentro').onclick = function () {
+      var seleccion = Array.prototype.slice
+        .call(document.querySelectorAll('#grupos input:checked'))
+        .map(function (c) { return c.value; });
+      var st = document.getElementById('stCentro');
+      setStatus(st, 'Sincronizando… puede tardar un poco.', '');
+      this.disabled = true;
+      var btn = this;
+      google.script.run
+        .withSuccessHandler(function (r) {
+          btn.disabled = false;
+          setStatus(st, 'Hecho: ' + r.creados + ' creados, ' + r.actualizados +
+            ' actualizados, ' + r.sinCambios + ' sin cambios.', 'ok');
+        })
+        .withFailureHandler(function (e) {
+          btn.disabled = false;
+          setStatus(st, mensajeError(e), 'err');
+        })
+        .sincronizarAhora({ incluirCentro: true, incluirPropios: false, gruposCentro: seleccion });
+    };
+
+    // --- Diaria ---
+    document.getElementById('btnDiaria').onclick = function () {
+      var st = document.getElementById('stDiaria');
+      var activar = this.classList.contains('primary');
+      this.disabled = true;
+      var btn = this;
+      setStatus(st, 'Aplicando…', '');
+      var run = google.script.run
+        .withSuccessHandler(function () {
+          btn.disabled = false;
+          location.reload();
+        })
+        .withFailureHandler(function (e) { btn.disabled = false; setStatus(st, mensajeError(e), 'err'); });
+      if (activar) run.activarSincronizacionDiaria({ incluirCentro: true, incluirPropios: true });
+      else run.desactivarSincronizacionDiaria();
+    };
+
+    // --- Traer mis contactos ---
+    document.getElementById('btnTraer').onclick = function () {
+      var st = document.getElementById('stMis');
+      setStatus(st, 'Cargando tus contactos…', '');
+      this.disabled = true;
+      var btn = this;
+      google.script.run
+        .withSuccessHandler(function (lista) { btn.disabled = false; pintarMisContactos(lista); setStatus(st, lista.length + ' contactos.', 'ok'); })
+        .withFailureHandler(function (e) { btn.disabled = false; setStatus(st, mensajeError(e), 'err'); })
+        .getMisContactos();
+    };
+
+    function pintarMisContactos(lista) {
+      var cont = document.getElementById('tablaMis');
+      if (!lista.length) { cont.innerHTML = '<p class="muted">No hay contactos.</p>'; return; }
+      cont.innerHTML = '<div class="tablewrap"><table><thead><tr>' +
+        '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Grupos</th><th></th>' +
+        '</tr></thead><tbody>' +
+        lista.map(function (c) {
+          return '<tr><td>' + esc(c.nombre) + '</td><td>' + esc(c.apellidos) + '</td><td>' +
+            esc(c.email) + '</td><td>' + esc((c.grupos || []).join(', ')) + '</td>' +
+            '<td><button class="danger" data-rn="' + esc(c.resourceName) + '">Eliminar</button></td></tr>';
+        }).join('') + '</tbody></table></div>';
+      Array.prototype.slice.call(cont.querySelectorAll('button[data-rn]')).forEach(function (b) {
+        b.onclick = function () {
+          if (!confirm('¿Eliminar este contacto de tu Google Contacts?')) return;
+          b.disabled = true;
+          google.script.run
+            .withSuccessHandler(function () { b.closest('tr').remove(); })
+            .withFailureHandler(function (e) { b.disabled = false; alert(mensajeError(e)); })
+            .eliminarContacto(b.getAttribute('data-rn'));
+        };
+      });
+    }
+  }
+};
+</script>

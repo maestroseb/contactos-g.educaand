@@ -1,0 +1,46 @@
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#fff; --ink:#1a1d24; --soft:#4a515c; --faint:#7a828e;
+    --border:#dce0e6; --accent:#0f766e; --accent-ink:#0b544e; --accent-soft:#0f766e14;
+    --good:#2f7d52; --danger:#b3261e; --warn:#a75d09;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#121419; --surface:#1b1e25; --ink:#e8eaef; --soft:#b0b7c3; --faint:#828a97;
+      --border:#2c313b; --accent:#4ec8bb; --accent-ink:#7fd8ce; --accent-soft:#4ec8bb14;
+      --good:#63c58d; --danger:#f0897f; --warn:#e0a44a;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; line-height:1.55}
+  .top{background:var(--surface); border-bottom:1px solid var(--border); padding:14px 20px;
+    display:flex; align-items:center; gap:12px; position:sticky; top:0; z-index:5}
+  .top h1{font-size:18px; margin:0; font-weight:700}
+  .top .who{margin-left:auto; font-size:13px; color:var(--faint)}
+  .badge{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    padding:3px 9px; border-radius:999px; background:var(--accent-soft); color:var(--accent-ink)}
+  main{max-width:820px; margin:0 auto; padding:22px 20px 60px; display:flex; flex-direction:column; gap:18px}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px 22px}
+  .card h2{font-size:17px; margin:0 0 4px}
+  .card p.desc{margin:0 0 14px; color:var(--soft); font-size:14.5px}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  button{font:inherit; font-weight:600; cursor:pointer; border-radius:10px; padding:10px 16px;
+    border:1px solid var(--border); background:var(--surface); color:var(--ink)}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+  button.danger{color:var(--danger); border-color:var(--danger)}
+  button:disabled{opacity:.5; cursor:default}
+  .groups{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 16px}
+  .groups label{display:inline-flex; gap:7px; align-items:center; font-size:14px;
+    border:1px solid var(--border); border-radius:999px; padding:6px 12px; cursor:pointer}
+  .switch{display:inline-flex; gap:10px; align-items:center}
+  .tablewrap{overflow-x:auto; border:1px solid var(--border); border-radius:10px}
+  table{border-collapse:collapse; width:100%; min-width:560px; font-size:13.5px}
+  th,td{text-align:left; padding:8px 12px; border-bottom:1px solid var(--border)}
+  th{background:var(--bg); font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--faint)}
+  tr:last-child td{border-bottom:none}
+  .status{font-size:14px; color:var(--soft); min-height:20px}
+  .status.ok{color:var(--good)} .status.err{color:var(--danger)}
+  .note{font-size:13px; color:var(--warn); background:var(--accent-soft); border-radius:8px; padding:10px 12px}
+  .muted{color:var(--faint); font-size:13px}
+</style>
