@@ -38,5 +38,11 @@ const DEFAULTS = {
 
 /** Correo del usuario que está usando la app en este momento. */
 function correoUsuarioActual_() {
-  return Session.getActiveUser().getEmail();
+  // Bajo "ejecutar como usuario que accede", el usuario efectivo coincide con
+  // el que accede y devuelve el correo de forma fiable (getActiveUser a veces
+  // viene vacío en la web app).
+  var e = '';
+  try { e = Session.getActiveUser().getEmail(); } catch (err) {}
+  if (!e) { try { e = Session.getEffectiveUser().getEmail(); } catch (err) {} }
+  return e || '';
 }

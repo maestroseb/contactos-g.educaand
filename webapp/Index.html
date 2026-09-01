@@ -2,27 +2,23 @@
 <html lang="es">
 <head>
   <base target="_top">
+  <meta charset="utf-8">
   <?!= include('Estilos') ?>
 </head>
 <body>
-  <div class="top">
-    <span style="font-size:22px">👥</span>
-    <h1 id="tituloApp">Asistente de Contactos</h1>
-    <span id="badgeRol" class="badge" hidden></span>
-    <span id="cambioVista"></span>
-    <span class="who" id="quien"></span>
+  <div id="root">
+    <div class="loading">
+      <svg class="ico spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>
+      <span>Cargando…</span>
+    </div>
   </div>
 
-  <main id="app">
-    <div class="card"><p class="muted">Cargando…</p></div>
-  </main>
-
-  <!-- La vista de profesorado está siempre; admin y asistente solo si procede. -->
-  <?!= include('Usuario') ?>
+  <?!= include('Iconos') ?>
+  <?!= include('MisContactos') ?>
   <? if (esAdmin) { ?>
-    <?!= include('Admin') ?>
-    <?!= include('Configurar') ?>
+    <?!= include('Configuracion') ?>
+    <?!= include('ContactosCentro') ?>
   <? } ?>
-  <?!= include('Cliente') ?>
+  <?!= include('App') ?>
 </body>
 </html>

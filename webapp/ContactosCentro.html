@@ -1,0 +1,98 @@
+<script>
+/** Pestaña CONTACTOS DEL CENTRO (solo admin). */
+window.TABS = window.TABS || {};
+window.TABS.contactosCentro = {
+  orden: 3, label: 'Contactos del centro', icono: 'claustro', adminOnly: true,
+  titulo: 'Contactos del centro', sub: 'El claustro que sincroniza todo el profesorado',
+  render: function (cont, estado) {
+    cont.innerHTML = [
+      '<div class="card">',
+        '<h2>'+icon('claustro')+'Claustro'+(estado.nombreCentro?' de '+esc(estado.nombreCentro):'')+'</h2>',
+        '<p class="desc">Estos contactos los sincroniza el profesorado y, si usas la lista, también definen quién puede entrar. Edita, añade o pega desde Séneca.</p>',
+        '<div id="grid"><p class="muted">Cargando claustro…</p></div>',
+        '<div class="row" style="margin-top:14px">',
+          '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir persona</button>',
+          '<button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar claustro</button>',
+        '</div>',
+        '<p class="status" id="sAdmin"></p>',
+      '</div>',
+
+      '<div class="card">',
+        '<h2>'+icon('importar')+'Importar desde Séneca</h2>',
+        '<p class="desc">Pega filas (Apellidos, Nombre ⇥ Correo ⇥ Teléfono ⇥ Especialidad ⇥ Etiquetas). Se añaden a la tabla; luego pulsa «Guardar claustro».</p>',
+        '<textarea id="pegado" rows="4" placeholder="Pérez García, Ana⇥ana@g.educaand.es⇥600...⇥Música⇥Claustro" style="font-family:var(--mono);font-size:12.5px"></textarea>',
+        '<div class="row" style="margin-top:12px"><button class="btn" id="bImport">'+icon('importar')+'Añadir a la tabla</button></div>',
+        '<p class="status" id="sImport"></p>',
+      '</div>',
+
+      '<div class="card">',
+        '<h2>'+icon('sync')+'Probar en mi cuenta</h2>',
+        '<p class="desc">Sube el claustro a tu propio Google Contacts para comprobar el resultado.</p>',
+        '<div class="row"><button class="btn primary" id="bSyncMia">'+icon('sync')+'Sincronizar en mi cuenta</button></div>',
+        '<p class="status" id="sMia"></p>',
+      '</div>'
+    ].join('');
+
+    var tb = null;
+    google.script.run
+      .withSuccessHandler(function (lista) { pintarGrid(cont, lista); tb = cont.querySelector('#grid tbody'); })
+      .withFailureHandler(function (e) { cont.querySelector('#grid').innerHTML = '<p class="status err">'+esc(mensajeError(e))+'</p>'; })
+      .adminLeerContactos();
+
+    cont.querySelector('#bAdd').onclick = function(){ if(tb) filaClaustro(tb, {}); };
+
+    cont.querySelector('#bGuardar').onclick = function(){
+      correr(this, cont.querySelector('#sAdmin'), 'Guardando…',
+        function(r){ r.adminGuardarContactos(leerClaustro(tb)); },
+        function(n, st){ setStatus(st, 'Guardado: '+n+' personas en el claustro.', 'ok'); });
+    };
+
+    cont.querySelector('#bImport').onclick = function(){
+      var texto = cont.querySelector('#pegado').value, st = cont.querySelector('#sImport');
+      if(!texto.trim()){ setStatus(st, 'Pega antes las filas.', 'err'); return; }
+      correr(this, st, 'Procesando…',
+        function(r){ r.adminImportarPegado(texto); },
+        function(lista, st){
+          lista.forEach(function(c){ filaClaustro(tb, c); });
+          cont.querySelector('#pegado').value='';
+          setStatus(st, 'Añadidas '+lista.length+' filas. Revisa y pulsa «Guardar claustro».', 'ok');
+        });
+    };
+
+    cont.querySelector('#bSyncMia').onclick = function(){
+      correr(this, cont.querySelector('#sMia'), 'Sincronizando…',
+        function(r){ r.sincronizarAhora({incluirCentro:true, incluirPropios:false}); },
+        function(res, st){ setStatus(st, resumenTexto(res), 'ok'); });
+    };
+  }
+};
+
+function pintarGrid(cont, lista){
+  cont.querySelector('#grid').innerHTML =
+    '<div class="tablewrap"><table><thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas (coma)</th><th></th></tr></thead><tbody></tbody></table></div>';
+  var tb = cont.querySelector('#grid tbody');
+  (lista||[]).forEach(function(c){ filaClaustro(tb, c); });
+  if(!tb.children.length) filaClaustro(tb, {});
+}
+function filaClaustro(tb, c){
+  var tr=document.createElement('tr'), ks=['nombre','apellidos','email','telefono','puesto','grupos'];
+  tr.innerHTML = ks.map(function(k){
+    var v = k==='grupos'?(c.grupos||[]).join(', '):(c[k]||'');
+    return '<td><input data-k="'+k+'" value="'+esc(v)+'"></td>';
+  }).join('')+'<td><button class="btn danger sm icononly" title="Quitar">'+icon('borrar')+'</button></td>';
+  tr.querySelector('button').onclick=function(){ tr.remove(); };
+  tb.appendChild(tr);
+}
+function leerClaustro(tb){
+  if(!tb) return [];
+  return Array.prototype.map.call(tb.querySelectorAll('tr'), function(tr){
+    var o={tipoEmail:'Trabajo'};
+    Array.prototype.forEach.call(tr.querySelectorAll('input'), function(i){
+      var k=i.getAttribute('data-k');
+      if(k==='grupos') o.grupos=i.value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+      else o[k]=i.value.trim();
+    });
+    return o;
+  }).filter(function(o){ return o.email||o.nombre; });
+}
+</script>

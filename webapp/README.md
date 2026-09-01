@@ -49,21 +49,31 @@ sola y se avisa por correo.
 | `Grupos.gs` | Pertenencia al claustro (grupo de Google y/o lista) |
 | `Contactos.gs` | Núcleo People API: crear/actualizar/fusionar/traer/eliminar |
 | `SincronizacionDiaria.gs` | Disparador diario por usuario |
-| `CentrosCatalogo.gs` | Catálogo de centros para verificar el código (muestra: Almería) |
-| `Index.html` | Shell de la página |
+| `CentrosCatalogo.gs` | Catálogo de centros de Andalucía para verificar el código |
+| `Index.html` | Esqueleto de la página (incluye el resto) |
 | `AccesoDenegado.html` | Página para no miembros / centro en preparación |
-| `Estilos.html` | CSS (claro/oscuro) |
-| `Configurar.html` | Asistente de configuración inicial (admin) |
-| `Usuario.html` / `Admin.html` | Vistas (registran `window.VISTAS.usuario` / `.admin`) |
-| `Cliente.html` | Arranque, utilidades y conmutador de vistas |
+| `Estilos.html` | CSS premium (claro/oscuro, shell con pestañas) |
+| `Iconos.html` | Iconos SVG (estilo Lucide) |
+| `App.html` | Shell, navegación por pestañas y utilidades del cliente |
+| `MisContactos.html` | Pestaña de profesorado (todos): sincronizar y contactos propios |
+| `Configuracion.html` | Pestaña de configuración del centro (solo admin) |
+| `ContactosCentro.html` | Pestaña del claustro / importación (solo admin) |
 
-## Estado actual
+## Interfaz
 
-Funciona de punta a punta: detección de admin, asistente (código de centro con
-verificación, especialidades/etiquetas editables, claustro por grupo y/o lista,
-importación por pegado), vista de profesorado (sincronizar centro, propios,
-diaria, traer/eliminar) y panel de admin (editar claustro, reconfigurar,
-sincronizar).
+Aplicación con **pestañas** (shell con barra lateral) y diseño propio en claro
+y oscuro, con iconos SVG (sin emojis):
+
+- **Mis contactos** (todos): sincronizar el centro por grupos, contactos
+  propios, sincronización diaria y gestión de los contactos de Google.
+- **Configuración** (solo admin): centro (con verificación de código),
+  especialidades, etiquetas y definición del claustro (grupo y/o lista).
+- **Contactos del centro** (solo admin): claustro editable e importación por
+  pegado desde Séneca.
+
+En el primer uso, el admin entra directamente en «Configuración» (con aviso de
+pendiente). El correo del usuario se resuelve con `getEffectiveUser` como
+respaldo para que la detección del admin sea fiable en la web app.
 
 **Pendiente / mejoras:**
 

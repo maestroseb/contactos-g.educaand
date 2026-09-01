@@ -1,0 +1,139 @@
+<script>
+/** Pestaña MIS CONTACTOS (todos los usuarios). */
+window.TABS = window.TABS || {};
+window.TABS.misContactos = {
+  orden: 1, label: 'Mis contactos', icono: 'yo',
+  titulo: 'Mis contactos', sub: 'Sincroniza los contactos del centro y gestiona los tuyos',
+  render: function (cont, estado) {
+    var grupos = estado.gruposCentro || [];
+    cont.innerHTML = [
+      // Centro
+      '<div class="card">',
+        '<h2>'+icon('centro')+'Contactos del centro</h2>',
+        '<p class="desc">Añade a tu cuenta de Google los contactos del ',
+        (estado.nombreCentro?'<b>'+esc(estado.nombreCentro)+'</b>':'centro'),
+        '. Marca los grupos que quieras (si no marcas ninguno, se sincronizan todos).</p>',
+        '<div class="chips" id="grupos">',
+          (grupos.length?grupos.map(function(g){return '<label><input type="checkbox" value="'+esc(g)+'">'+esc(g)+'</label>';}).join('')
+            :'<span class="muted">El administrador aún no ha cargado grupos.</span>'),
+        '</div>',
+        '<div class="row" style="margin-top:16px"><button class="btn primary" id="bCentro">'+icon('sync')+'Sincronizar contactos del centro</button></div>',
+        '<p class="status" id="sCentro"></p>',
+      '</div>',
+      // Propios
+      '<div class="card">',
+        '<h2>'+icon('yo')+'Mis contactos propios</h2>',
+        '<p class="desc">Contactos que añades tú y que se guardan solo en tu cuenta.</p>',
+        '<div class="tablewrap"><table id="tPropios"><thead><tr>',
+          '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas (coma)</th><th></th>',
+        '</tr></thead><tbody></tbody></table></div>',
+        '<div class="row" style="margin-top:14px">',
+          '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir fila</button>',
+          '<button class="btn" id="bGuardar">'+icon('guardar')+'Guardar</button>',
+          '<button class="btn primary" id="bSyncP">'+icon('sync')+'Sincronizar mis contactos</button>',
+        '</div>',
+        '<p class="status" id="sPropios"></p>',
+      '</div>',
+      // Diaria
+      '<div class="card">',
+        '<h2>'+icon('power')+'Sincronización diaria automática</h2>',
+        '<p class="desc">Si la activas, tus contactos se actualizan solos cada noche.</p>',
+        '<div class="row"><button class="btn '+(estado.diariaActiva?'danger':'primary')+'" id="bDiaria">'+
+          icon('power')+(estado.diariaActiva?'Desactivar sincronización diaria':'Activar sincronización diaria')+'</button>',
+          '<span class="status" id="sDiaria" style="margin:0">'+(estado.diariaActiva?'Activada':'Desactivada')+'</span></div>',
+      '</div>',
+      // Google contacts
+      '<div class="card">',
+        '<h2>'+icon('correo')+'Gestionar mis contactos de Google</h2>',
+        '<p class="desc">Trae tus contactos actuales para revisarlos o eliminarlos.</p>',
+        '<div class="row"><button class="btn" id="bTraer">'+icon('sync')+'Traer mis contactos</button></div>',
+        '<p class="status" id="sMis"></p><div id="tablaMis" style="margin-top:14px"></div>',
+      '</div>'
+    ].join('');
+
+    // Centro
+    cont.querySelector('#bCentro').onclick = function(){
+      var sel = Array.prototype.map.call(cont.querySelectorAll('#grupos input:checked'), function(c){return c.value;});
+      correr(this, cont.querySelector('#sCentro'), 'Sincronizando… puede tardar un poco.',
+        function(r){ r.sincronizarAhora({incluirCentro:true, incluirPropios:false, gruposCentro:sel}); },
+        function(res, st){ setStatus(st, resumenTexto(res), 'ok'); });
+    };
+
+    // Propios
+    var tb = cont.querySelector('#tPropios tbody');
+    (estado.contactosPropios||[]).forEach(function(c){ filaPropio(tb, c); });
+    if(!tb.children.length) filaPropio(tb, {});
+    cont.querySelector('#bAdd').onclick = function(){ filaPropio(tb, {}); };
+    cont.querySelector('#bGuardar').onclick = function(){
+      correr(this, cont.querySelector('#sPropios'), 'Guardando…',
+        function(r){ r.guardarPropios(leerPropios(tb)); },
+        function(res, st){ setStatus(st, 'Guardado ('+res.length+').', 'ok'); });
+    };
+    cont.querySelector('#bSyncP').onclick = function(){
+      var st = cont.querySelector('#sPropios'), btn=this, lista=leerPropios(tb);
+      google.script.run.withSuccessHandler(function(){
+        correr(btn, st, 'Sincronizando tus contactos…',
+          function(r){ r.sincronizarAhora({incluirCentro:false, incluirPropios:true}); },
+          function(res, st){ setStatus(st, resumenTexto(res), 'ok'); });
+      }).withFailureHandler(function(e){ setStatus(st, mensajeError(e), 'err'); }).guardarPropios(lista);
+    };
+
+    // Diaria
+    cont.querySelector('#bDiaria').onclick = function(){
+      var st=cont.querySelector('#sDiaria'), activar=this.classList.contains('primary'), btn=this;
+      btn.disabled=true; setStatus(st,'Aplicando…','busy');
+      var run = google.script.run
+        .withSuccessHandler(function(){ location.reload(); })
+        .withFailureHandler(function(e){ btn.disabled=false; setStatus(st, mensajeError(e), 'err'); });
+      if(activar) run.activarSincronizacionDiaria({incluirCentro:true, incluirPropios:true});
+      else run.desactivarSincronizacionDiaria();
+    };
+
+    // Google contacts
+    cont.querySelector('#bTraer').onclick = function(){
+      correr(this, cont.querySelector('#sMis'), 'Cargando tus contactos…',
+        function(r){ r.getMisContactos(); },
+        function(lista, st){ pintarMis(cont, lista); setStatus(st, lista.length+' contactos.', 'ok'); });
+    };
+  }
+};
+
+function filaPropio(tb, c){
+  var tr=document.createElement('tr'), ks=['nombre','apellidos','email','telefono','puesto','grupos'];
+  tr.innerHTML = ks.map(function(k){
+    var v = k==='grupos'?(c.grupos||[]).join(', '):(c[k]||'');
+    return '<td><input data-k="'+k+'" value="'+esc(v)+'"></td>';
+  }).join('')+'<td><button class="btn danger sm icononly" title="Quitar">'+icon('borrar')+'</button></td>';
+  tr.querySelector('button').onclick=function(){ tr.remove(); };
+  tb.appendChild(tr);
+}
+function leerPropios(tb){
+  return Array.prototype.map.call(tb.querySelectorAll('tr'), function(tr){
+    var o={tipoEmail:'Trabajo'};
+    Array.prototype.forEach.call(tr.querySelectorAll('input'), function(i){
+      var k=i.getAttribute('data-k');
+      if(k==='grupos') o.grupos=i.value.split(',').map(function(s){return s.trim();}).filter(Boolean);
+      else o[k]=i.value.trim();
+    });
+    return o;
+  }).filter(function(o){ return o.email||o.nombre; });
+}
+function pintarMis(cont, lista){
+  var box=cont.querySelector('#tablaMis');
+  if(!lista.length){ box.innerHTML='<p class="muted">No hay contactos.</p>'; return; }
+  box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Etiquetas</th><th></th></tr></thead><tbody>'+
+    lista.map(function(c){
+      return '<tr><td>'+esc(c.nombre)+'</td><td>'+esc(c.apellidos)+'</td><td>'+esc(c.email)+'</td><td>'+
+        esc((c.grupos||[]).join(', '))+'</td><td><button class="btn danger sm icononly" data-rn="'+esc(c.resourceName)+'" title="Eliminar">'+icon('borrar')+'</button></td></tr>';
+    }).join('')+'</tbody></table></div>';
+  Array.prototype.forEach.call(box.querySelectorAll('button[data-rn]'), function(b){
+    b.onclick=function(){
+      if(!confirm('¿Eliminar este contacto de tu Google Contacts?')) return;
+      b.disabled=true;
+      google.script.run.withSuccessHandler(function(){ b.closest('tr').remove(); })
+        .withFailureHandler(function(e){ b.disabled=false; alert(mensajeError(e)); })
+        .eliminarContacto(b.getAttribute('data-rn'));
+    };
+  });
+}
+</script>
