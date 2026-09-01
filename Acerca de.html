@@ -1,0 +1,32 @@
+<html>
+
+<head>
+  <base target="_top">
+  <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">
+</head>
+
+<body>
+  <img style="margin: auto; display:block; width: 100%" src="https://lh3.googleusercontent.com/drive-viewer/AEYmBYSBYVX5JLd71_N_BPjlLf1rvLiqQ5Frf_h1ixVEODRMAUZRVfSG_spyUBsnYHViWz14-WlBAO_bwn478eXgZNJIxiGpJQ">
+  <p>
+    <b><?= appName ?></b> es una herramienta diseñada para facilitar el mantenimiento de tus contactos en Google
+    Contacts. Con ella podrás incluir cómodamente tus contactos, copiándolos directamente desde Séneca, y realizar una
+    sincronización manual o automática (diaria).
+  </p>
+  <p>
+      Además, podrás administrar los Contactos de Google desde la pestaña Mis Contactos, con la que podrás descargar, modificar y eliminar cualquiera de ellos con un solo botón.
+  <p>
+    <?= version ?>.
+  </p>
+  <p>© Sebastián Giraldo Jiménez (<a target="_blank" href="https://twitter.com/maestro_seb">@maestro_seb</a>).</p>
+  <p>© Fran Rosales Tovar (<a target="_blank" href="https://twitter.com/FranRosalesTova">@franrosalestova</a>).</p>
+
+  <button style="float: right;" onclick="closeDialog()">OK</button>
+</body>
+
+<script>
+  function closeDialog() {
+      google.script.host.close();
+    }   
+</script>
+
+</html>
