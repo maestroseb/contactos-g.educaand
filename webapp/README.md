@@ -1,83 +1,86 @@
 # Asistente de Contactos — Web App (v4)
 
-Migración del Asistente de Contactos de **hoja de cálculo** a una **Web App de
-Apps Script** con dos vistas según quién entre:
+Web App de Apps Script que sustituye a la hoja madre/hija, pensada para
+**distribuirse por centros**: cada centro copia la plantilla, su administrador
+la despliega y **un asistente lo configura todo desde la web** — sin tocar
+ninguna hoja de cálculo.
 
-- **Administrador** → gestiona la lista central del centro (equivale a la "hoja madre").
-- **Profesorado** → sincroniza los contactos del centro y/o los suyos propios en
-  **su** cuenta de Google Contacts, con opción de sincronización diaria.
+Dos vistas según quién entra:
 
-> Diseño y decisiones: ver el documento de diseño enlazado en la conversación.
-> Este directorio es un **proyecto standalone independiente**; los archivos `.gs`
-> del proyecto de hoja siguen en la raíz del repo como referencia.
+- **Administrador** (se detecta solo en el primer despliegue) → asistente de
+  configuración y gestión del claustro.
+- **Profesorado** → sincroniza los contactos del centro y/o los suyos en **su**
+  cuenta de Google Contacts, con opción diaria.
 
-## Control de acceso (importante)
+## Modelo de distribución (copia por centro)
 
-`g.educaand.es` es el dominio de **todo el profesorado andaluz**, no solo de un
-centro. Por eso el acceso NO se controla solo por dominio:
+- La **plantilla** es una hoja en blanco con este script asociado. Cada admin
+  hace una **copia** → pasa a ser el dueño y, al desplegar por primera vez,
+  queda registrado como administrador de su centro.
+- **No hay hoja que editar ni ID que configurar**: toda la información (centro,
+  especialidades, etiquetas, claustro y contactos) se guarda en el **almacén
+  interno del proyecto** (`PropertiesService`), que leen todos los usuarios de
+  esa web app sin compartir nada.
+- Los datos de cada centro quedan **aislados** en su propia copia.
 
-- La web se despliega con acceso **de dominio** (necesario para la app "Interna"
-  sin verificación), pero el **portero real está en `doGet`**: comprueba la
-  pertenencia al **grupo de Google del profesorado** del centro (el correo de
-  `⚙️ Configuración!D4`). Quien no pertenezca ve una página de *acceso denegado*.
-- Ese grupo lo **administra la persona admin**: añadir/quitar a alguien del grupo
-  es lo que le da o le quita el acceso.
-- Cuando alguien sale del claustro (del grupo), la **sincronización diaria** se
-  detiene sola y se le avisa por correo (`SincronizacionDiaria.gs`).
+## Control de acceso
 
-Es el mismo comportamiento que la hoja madre/hija: manda la pertenencia al grupo.
+`g.educaand.es` es el dominio de **todo el profesorado andaluz**, así que el
+acceso no se controla solo por dominio. El portero está en `doGet` y admite
+**dos fuentes de pertenencia al claustro, combinables**:
+
+1. Un **grupo de Google** del profesorado (el admin lo gestiona), y/o
+2. una **lista de personas** que administra el admin desde la web (se forma con
+   los contactos del claustro y correos extra).
+
+Perteneces si estás en el grupo **o** en la lista. Quien no, ve una página de
+acceso denegado. Al salir del grupo/lista, la sincronización diaria se detiene
+sola y se avisa por correo.
 
 ## Estructura
 
 | Archivo | Papel |
 |---|---|
-| `appsscript.json` | Manifiesto: web app `DOMAIN` + `USER_ACCESSING`, People API, scopes |
-| `Config.gs` | **Único sitio a configurar**: ID de la hoja central, admins, pestañas |
-| `WebApp.gs` | `doGet` + enrutado por rol + API que llama el cliente |
-| `DatosCentral.gs` | Acceso a la hoja central por ID + contactos propios (por usuario) |
-| `Grupos.gs` | Comprobación de pertenencia al grupo del profesorado |
-| `Contactos.gs` | Núcleo People API: crear/actualizar/traer/eliminar |
-| `SincronizacionDiaria.gs` | Disparador diario por usuario (desatendido) |
+| `appsscript.json` | Manifiesto: web app `DOMAIN` + `USER_ACCESSING`, People API |
+| `Config.gs` | Constantes y **valores por defecto** (especialidades, etiquetas) |
+| `Estado.gs` | **Almacén interno**: admin, configuración y lista del claustro |
+| `WebApp.gs` | `doGet` (3 estados) + API que llama el cliente |
+| `DatosCentral.gs` | Contactos del centro (almacén) y propios (por usuario) + parseo de pegado |
+| `Grupos.gs` | Pertenencia al claustro (grupo de Google y/o lista) |
+| `Contactos.gs` | Núcleo People API: crear/actualizar/fusionar/traer/eliminar |
+| `SincronizacionDiaria.gs` | Disparador diario por usuario |
+| `CentrosCatalogo.gs` | Catálogo de centros para verificar el código (muestra: Almería) |
 | `Index.html` | Shell de la página |
-| `AccesoDenegado.html` | Página para quien no pertenece al claustro |
+| `AccesoDenegado.html` | Página para no miembros / centro en preparación |
 | `Estilos.html` | CSS (claro/oscuro) |
+| `Configurar.html` | Asistente de configuración inicial (admin) |
 | `Usuario.html` / `Admin.html` | Vistas (registran `window.VISTAS.usuario` / `.admin`) |
-| `Cliente.html` | Arranque y utilidades del cliente |
+| `Cliente.html` | Arranque, utilidades y conmutador de vistas |
 
-## Estado actual (andamiaje)
+## Estado actual
 
-Funciona de punta a punta:
-
-- **Portero por grupo** en `doGet` (quien no pertenece al claustro no entra).
-- **Vista de profesorado**: sincronizar el centro por grupos, formulario de
-  *mis contactos propios* (editar + guardar + sincronizar), sincronización
-  diaria y gestión (traer/eliminar) de los contactos de Google.
-- **Vista de admin**: edición en línea de la lista central (`⬆️ Datos`) con
-  guardado, más sincronización en la propia cuenta.
-- **Conmutador de vistas** para que el admin alterne panel / vista profesorado.
-- **Fusión de duplicados** completa portada del proyecto de hoja.
+Funciona de punta a punta: detección de admin, asistente (código de centro con
+verificación, especialidades/etiquetas editables, claustro por grupo y/o lista,
+importación por pegado), vista de profesorado (sincronizar centro, propios,
+diaria, traer/eliminar) y panel de admin (editar claustro, reconfigurar,
+sincronizar).
 
 **Pendiente / mejoras:**
 
-- Edición en línea de los contactos ya existentes en "Mis contactos de Google"
-  (ahora solo se pueden traer y eliminar).
-- Ajustar `datosLayout` en `Config.gs` si la hoja real difiere (fila de inicio,
-  nº de columnas).
-- Probar el despliegue real y depurar (Apps Script no se puede ejecutar fuera
-  de Google).
+- Completar `CentrosCatalogo.gs` con **todas** las provincias (ahora solo
+  Almería; extraíble de la pestaña de centros de la hoja original).
+- Edición en línea de los contactos ya existentes en "Mis contactos de Google".
+- Si un claustro es muy grande, revisar límites del almacén (ya se trocea).
+- Probar el despliegue real y depurar (Apps Script no se ejecuta fuera de Google).
 
-## Puesta en marcha
+## Puesta en marcha (resumen)
 
-1. **Crear el proyecto**: nuevo proyecto en <https://script.google.com> (con la
-   cuenta que será la dueña) y subir estos archivos (recomendado con
-   [`clasp`](https://github.com/google/clasp): `clasp push`).
-2. **Configurar** `Config.gs`: `idHojaCentral` (ID de la hoja madre) y `admins`.
-3. **Compartir la hoja central** en solo lectura con el dominio `g.educaand.es`.
-4. **Proyecto de Google Cloud → consentimiento "Interno"** (opción A del diseño):
-   asociar un proyecto de Cloud del dominio y marcar la pantalla de
-   consentimiento OAuth como *Interna*. Así no aparece el aviso de "app no
-   verificada" ni hace falta verificación.
-5. **Activar el servicio avanzado People** (ya declarado en `appsscript.json`).
-6. **Desplegar** como *Aplicación web*: ejecutar como **usuario que accede**,
-   con acceso **cualquier usuario del dominio**.
-7. Repartir la **URL** al claustro. Cada persona autoriza una vez y listo.
+1. Copiar la plantilla (hoja + script) — cada admin la suya.
+2. Crear proyecto de Google Cloud **Interno** y enlazarlo (evita el aviso de
+   app no verificada). Habilitar People API.
+3. Desplegar como **aplicación web**: ejecutar como *usuario que accede*, acceso
+   *cualquier usuario de g.educaand.es*.
+4. Abrir la URL como admin → completar el **asistente**.
+5. Repartir la URL al claustro.
+
+> Guía detallada de despliegue: ver el documento enlazado en la conversación.

@@ -1,125 +1,52 @@
 /**
- * DatosCentral.gs — Capa de acceso a datos.
+ * DatosCentral.gs — Acceso a los datos del centro y de cada usuario.
  *
- * Sustituye a SpreadsheetApp.getActiveSpreadsheet() del proyecto de hoja:
- * en una web app no hay "hoja activa", así que abrimos la hoja central por ID
- * (PARAMS.idHojaCentral) y los datos propios de cada usuario se guardan en sus
- * UserProperties (privados de cada cuenta).
+ * Los contactos del centro viven en el almacén interno (Estado.gs), no en una
+ * hoja. Los contactos propios de cada usuario van en sus UserProperties.
  */
 
-/** Abre la hoja central por ID. */
-function abrirHojaCentral_() {
-  return SpreadsheetApp.openById(PARAMS.idHojaCentral);
-}
-
-/**
- * Lee los contactos del CENTRO desde la pestaña "Subir Contactos" de la hoja
- * central (la que ya genera las fórmulas: Nombre/Apellidos separados, etc.).
- * Devuelve un array de objetos de contacto normalizados.
- */
+/** Contactos del centro (los que sincroniza el claustro). */
 function leerContactosCentro_() {
-  const hoja = abrirHojaCentral_().getSheetByName(PARAMS.hojas.subirContactos);
-  if (!hoja || hoja.getLastRow() < 2) return [];
-  const datos = hoja.getDataRange().getValues();
-  return filasASontactos_(datos);
+  return leerContactosCentroStore_();
 }
 
-/**
- * Convierte filas de "Subir Contactos" en objetos normalizados.
- * Columnas (según la hoja actual):
- * 0 Nombre y Apellidos | 1 Nombre | 2 Apellidos | 3 Tipo Email | 4 E-mail |
- * 5 Teléfono | 6 Puesto/Departamento | 7-10 Etiqueta 1..4
- */
-function filasASontactos_(datos) {
-  const out = [];
-  for (let i = 1; i < datos.length; i++) {
-    const fila = datos[i];
-    const email = fila[4] ? String(fila[4]).trim().toLowerCase() : '';
-    const nombre = fila[1] ? String(fila[1]).trim() : '';
-    if (!email && !nombre) continue;
-    out.push({
-      nombre: nombre,
-      apellidos: fila[2] ? String(fila[2]).trim() : '',
-      tipoEmail: fila[3] ? String(fila[3]).trim() : 'Trabajo',
-      email: email,
-      telefono: fila[5] ? String(fila[5]).trim() : '',
-      puesto: fila[6] ? String(fila[6]).trim() : '',
-      grupos: [fila[7], fila[8], fila[9], fila[10]]
-        .map(g => (g ? String(g).trim() : ''))
-        .filter(String)
-    });
-  }
-  return out;
-}
-
-/** Correo del grupo del profesorado configurado en la hoja central (o ''). */
-function correoGrupoProfesorado_() {
-  const hoja = abrirHojaCentral_().getSheetByName(PARAMS.hojas.configuracion);
-  if (!hoja) return '';
-  let correo = String(hoja.getRange(PARAMS.config.correoGrupoProfesorado).getValue() || '').trim();
-  if (correo.toLowerCase() === PARAMS.config.placeholderCorreo.toLowerCase()) correo = '';
-  return correo;
-}
-
-/** Nombre del centro configurado en la hoja central. */
-function nombreCentro_() {
-  const hoja = abrirHojaCentral_().getSheetByName(PARAMS.hojas.configuracion);
-  if (!hoja) return '';
-  return String(hoja.getRange(PARAMS.config.nombreCentro).getValue() || '').trim();
-}
-
-/**
- * Catálogo de grupos/etiquetas que el usuario puede elegir sincronizar.
- * Se derivan de los grupos presentes en los contactos del centro.
- */
+/** Etiquetas/grupos presentes en los contactos del centro (para la vista). */
 function gruposDelCentro_() {
   const set = {};
-  leerContactosCentro_().forEach(c => c.grupos.forEach(g => { set[g] = true; }));
+  leerContactosCentro_().forEach(c => (c.grupos || []).forEach(g => { if (g) set[g] = true; }));
   return Object.keys(set).sort((a, b) => a.localeCompare(b));
 }
 
-/* ------------------------------------------------------------------ *
- *  Edición de la lista central (⬆️ Datos) desde el panel admin        *
- * ------------------------------------------------------------------ */
-
-/** Lee las filas editables de ⬆️ Datos (matriz de numColumnas por fila). */
-function leerFilasDatos_() {
-  const L = PARAMS.datosLayout;
-  const hoja = abrirHojaCentral_().getSheetByName(PARAMS.hojas.datos);
-  const ultima = hoja.getLastRow();
-  if (ultima < L.filaInicio) return [];
-  const n = ultima - L.filaInicio + 1;
-  return hoja.getRange(L.filaInicio, 1, n, L.numColumnas).getValues()
-    .filter(f => f.some(c => String(c).trim() !== ''));
-}
-
 /**
- * Sobrescribe la zona de datos de ⬆️ Datos con las filas dadas.
- * Limpia el rango anterior y escribe las nuevas (respeta numColumnas).
+ * Convierte texto pegado (p. ej. exportado de Séneca) en contactos.
+ * Columnas por tabulador: "Apellidos, Nombre" | Correo | Teléfono |
+ * Especialidad/DPTO | Etiqueta 1 | Etiqueta 2 | Etiqueta 3 | Etiqueta 4.
  */
-function escribirFilasDatos_(filas) {
-  const L = PARAMS.datosLayout;
-  const hoja = abrirHojaCentral_().getSheetByName(PARAMS.hojas.datos);
-
-  // Normaliza cada fila a numColumnas.
-  const limpias = (filas || [])
-    .map(f => {
-      const fila = [];
-      for (let i = 0; i < L.numColumnas; i++) fila.push(f[i] != null ? f[i] : '');
-      return fila;
-    })
-    .filter(f => f.some(c => String(c).trim() !== ''));
-
-  // Borra el bloque anterior.
-  const ultima = hoja.getLastRow();
-  if (ultima >= L.filaInicio) {
-    hoja.getRange(L.filaInicio, 1, ultima - L.filaInicio + 1, L.numColumnas).clearContent();
-  }
-  // Escribe el nuevo.
-  if (limpias.length) {
-    hoja.getRange(L.filaInicio, 1, limpias.length, L.numColumnas).setValues(limpias);
-  }
-  return limpias.length;
+function parsearClaustroPegado_(texto) {
+  const filas = String(texto || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const out = [];
+  filas.forEach(linea => {
+    const c = linea.split('\t').map(s => s.trim());
+    const nombreCompleto = c[0] || '';
+    let apellidos = '', nombre = nombreCompleto;
+    if (nombreCompleto.indexOf(',') !== -1) {
+      const p = nombreCompleto.split(',');
+      apellidos = p[0].trim();
+      nombre = p.slice(1).join(',').trim();
+    }
+    const email = c[1] ? c[1].trim().toLowerCase() : '';
+    if (!email && !nombre) return;
+    out.push({
+      nombre: nombre,
+      apellidos: apellidos,
+      tipoEmail: 'Trabajo',
+      email: email,
+      telefono: c[2] || '',
+      puesto: c[3] || '',
+      grupos: [c[4], c[5], c[6], c[7]].map(g => (g ? g.trim() : '')).filter(String)
+    });
+  });
+  return out;
 }
 
 /* ------------------------------------------------------------------ *

@@ -1,8 +1,8 @@
 <script>
 /**
  * Vista del ADMINISTRADOR. Registra window.VISTAS.admin.render(estado).
- * Edita en línea la pestaña "⬆️ Datos" de la hoja central (la lista que
- * sincroniza todo el claustro) y permite sincronizar en la propia cuenta.
+ * Gestiona la lista del claustro (almacén interno), permite reconfigurar el
+ * centro y sincronizar en la propia cuenta.
  */
 window.VISTAS = window.VISTAS || {};
 window.VISTAS.admin = {
@@ -10,47 +10,70 @@ window.VISTAS.admin = {
     var app = document.getElementById('app');
     app.innerHTML = [
       '<div class="card">',
-        '<h2>Lista central del centro</h2>',
-        '<p class="desc">Edita aquí los contactos del ',
-        (estado.nombreCentro ? '<b>' + esc(estado.nombreCentro) + '</b>' : 'centro'),
-        '. Es lo que sincroniza todo el claustro. Los cambios se guardan en la pestaña ',
-        '<code>⬆️ Datos</code> de la hoja central.</p>',
-        '<div id="gridWrap"><p class="muted">Cargando lista…</p></div>',
+        '<h2>Claustro de ', (estado.nombreCentro ? '<b>' + esc(estado.nombreCentro) + '</b>' : 'tu centro'), '</h2>',
+        '<p class="desc">Estos son los contactos que sincroniza el profesorado y, si usas la lista, también definen quién puede entrar. Edita, añade o pega desde Séneca.</p>',
+        '<div id="gridWrap"><p class="muted">Cargando claustro…</p></div>',
         '<div class="row" style="margin-top:12px">',
-          '<button id="btnAddDato">＋ Añadir contacto</button>',
-          '<button class="primary" id="btnGuardarDatos">💾 Guardar lista central</button>',
+          '<button id="btnAdd">＋ Añadir persona</button>',
+          '<button class="primary" id="btnGuardar">💾 Guardar claustro</button>',
         '</div>',
         '<p class="status" id="stAdmin"></p>',
       '</div>',
 
       '<div class="card">',
+        '<h2>Importar desde Séneca</h2>',
+        '<p class="desc">Pega filas (Apellidos, Nombre ⇥ Correo ⇥ Teléfono ⇥ Especialidad ⇥ Etiquetas). Se añaden a la tabla de arriba; luego pulsa Guardar.</p>',
+        '<textarea id="pegado" rows="4" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--surface);color:var(--ink);font-family:monospace;font-size:13px"></textarea>',
+        '<div class="row" style="margin-top:10px"><button id="btnImportar">Añadir a la tabla</button></div>',
+        '<p class="status" id="stImport"></p>',
+      '</div>',
+
+      '<div class="card">',
+        '<h2>Ajustes del centro</h2>',
+        '<p class="desc">Cambia el código de centro, especialidades, etiquetas o cómo se define el claustro (grupo de Google y/o lista).</p>',
+        '<div class="row"><button id="btnReconfig">⚙️ Reconfigurar centro</button></div>',
+      '</div>',
+
+      '<div class="card">',
         '<h2>Sincronizar en mi cuenta</h2>',
-        '<p class="desc">Sube la lista del centro a tu propio Google Contacts (para probar el resultado).</p>',
-        '<div class="row"><button class="primary" id="btnSyncMia">🔁 Sincronizar el centro en mi cuenta</button></div>',
+        '<p class="desc">Sube el claustro a tu propio Google Contacts (para comprobar el resultado).</p>',
+        '<div class="row"><button class="primary" id="btnSyncMia">🔁 Sincronizar en mi cuenta</button></div>',
         '<p class="status" id="stMia"></p>',
       '</div>'
     ].join('');
 
-    // Cargar la lista central en un grid editable.
+    var tbody = null;
     google.script.run
-      .withSuccessHandler(function (data) { pintarGrid(data.cabeceras, data.filas); })
+      .withSuccessHandler(function (lista) { pintarGrid(lista); })
       .withFailureHandler(function (e) {
-        document.getElementById('gridWrap').innerHTML =
-          '<p class="status err">' + esc(mensajeError(e)) + '</p>';
+        document.getElementById('gridWrap').innerHTML = '<p class="status err">' + esc(mensajeError(e)) + '</p>';
       })
-      .adminLeerDatos();
+      .adminLeerContactos();
 
-    document.getElementById('btnAddDato').onclick = function () {
-      var tbody = document.querySelector('#gridDatos tbody');
-      if (tbody) anadirFilaDato(tbody, []);
+    document.getElementById('btnAdd').onclick = function () { if (tbody) anadirFilaClaustro(tbody, {}); };
+
+    document.getElementById('btnGuardar').onclick = function () {
+      var st = document.getElementById('stAdmin');
+      correr(this, st, 'Guardando…',
+        function (run) { run.adminGuardarContactos(leerClaustro(tbody)); },
+        function (n, st) { setStatus(st, 'Guardado: ' + n + ' personas en el claustro.', 'ok'); });
     };
 
-    document.getElementById('btnGuardarDatos').onclick = function () {
-      var st = document.getElementById('stAdmin');
-      var filas = leerGrid();
-      correr(this, st, 'Guardando la lista central…',
-        function (run) { run.adminGuardarDatos(filas); },
-        function (n, st) { setStatus(st, 'Guardado: ' + n + ' contactos en la lista central.', 'ok'); });
+    document.getElementById('btnImportar').onclick = function () {
+      var texto = document.getElementById('pegado').value;
+      var st = document.getElementById('stImport');
+      if (!texto.trim()) { setStatus(st, 'Pega antes las filas.', 'err'); return; }
+      correr(this, st, 'Procesando…',
+        function (run) { run.adminImportarPegado(texto); },
+        function (lista, st) {
+          lista.forEach(function (c) { anadirFilaClaustro(tbody, c); });
+          document.getElementById('pegado').value = '';
+          setStatus(st, 'Añadidas ' + lista.length + ' filas. Revisa y pulsa «Guardar claustro».', 'ok');
+        });
+    };
+
+    document.getElementById('btnReconfig').onclick = function () {
+      if (window.VISTAS.configurar) mostrarVista('configurar');
     };
 
     document.getElementById('btnSyncMia').onclick = function () {
@@ -60,36 +83,38 @@ window.VISTAS.admin = {
         function (r, st) { setStatus(st, resumenTexto(r), 'ok'); });
     };
 
-    function pintarGrid(cabeceras, filas) {
+    function pintarGrid(lista) {
       var wrap = document.getElementById('gridWrap');
-      wrap.innerHTML = '<div class="tablewrap"><table id="gridDatos"><thead><tr>' +
-        cabeceras.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') +
-        '<th></th></tr></thead><tbody></tbody></table></div>';
-      var tbody = wrap.querySelector('tbody');
-      (filas || []).forEach(function (f) { anadirFilaDato(tbody, f); });
-      if (!tbody.children.length) anadirFilaDato(tbody, []);
+      wrap.innerHTML = '<div class="tablewrap"><table id="gridClaustro"><thead><tr>' +
+        '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas (coma)</th><th></th>' +
+        '</tr></thead><tbody></tbody></table></div>';
+      tbody = wrap.querySelector('tbody');
+      (lista || []).forEach(function (c) { anadirFilaClaustro(tbody, c); });
+      if (!tbody.children.length) anadirFilaClaustro(tbody, {});
     }
   }
 };
 
-/* -------- helpers del grid de la lista central -------- */
-function anadirFilaDato(tbody, fila) {
-  var n = (window.__estado && window.__estado.numColDatos) || 8;
+/* -------- helpers del grid del claustro -------- */
+function anadirFilaClaustro(tbody, c) {
   var tr = document.createElement('tr');
-  var celdas = '';
-  for (var i = 0; i < n; i++) {
-    var v = fila[i] != null ? fila[i] : '';
-    celdas += '<td><input value="' + esc(v) + '" style="width:100%;min-width:110px;border:1px solid var(--border);border-radius:6px;padding:5px 7px;background:var(--surface);color:var(--ink)"></td>';
-  }
-  tr.innerHTML = celdas + '<td><button class="danger">✕</button></td>';
+  var campos = ['nombre', 'apellidos', 'email', 'telefono', 'puesto', 'grupos'];
+  tr.innerHTML = campos.map(function (k) {
+    var v = k === 'grupos' ? (c.grupos || []).join(', ') : (c[k] || '');
+    return '<td><input data-k="' + k + '" value="' + esc(v) + '" style="width:100%;min-width:100px;border:1px solid var(--border);border-radius:6px;padding:5px 7px;background:var(--surface);color:var(--ink)"></td>';
+  }).join('') + '<td><button class="danger">✕</button></td>';
   tr.querySelector('button').onclick = function () { tr.remove(); };
   tbody.appendChild(tr);
 }
-function leerGrid() {
-  var tbody = document.querySelector('#gridDatos tbody');
+function leerClaustro(tbody) {
   if (!tbody) return [];
   return Array.prototype.slice.call(tbody.querySelectorAll('tr')).map(function (tr) {
-    return Array.prototype.slice.call(tr.querySelectorAll('input')).map(function (i) { return i.value.trim(); });
-  }).filter(function (f) { return f.some(function (c) { return c !== ''; }); });
+    var o = { tipoEmail: 'Trabajo' };
+    Array.prototype.slice.call(tr.querySelectorAll('input')).forEach(function (inp) {
+      var k = inp.getAttribute('data-k');
+      if (k === 'grupos') o.grupos = inp.value.split(',').map(function (s) { return s.trim(); }).filter(String);
+      else o[k] = inp.value.trim();
+    });
+    return o;
+  }).filter(function (o) { return o.email || o.nombre; });
 }
-</script>

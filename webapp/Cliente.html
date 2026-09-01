@@ -46,8 +46,10 @@ document.addEventListener('DOMContentLoaded', function () {
       badge.hidden = false;
       badge.textContent = estado.esAdmin ? 'Administrador' : 'Profesorado';
 
-      // El admin puede alternar entre su panel y la vista de profesorado.
-      if (estado.esAdmin && window.VISTAS && window.VISTAS.admin) {
+      if (estado.esAdmin && !estado.configurado && window.VISTAS && window.VISTAS.configurar) {
+        // Primer uso: el admin ve el asistente de configuración.
+        mostrarVista('configurar');
+      } else if (estado.esAdmin && window.VISTAS && window.VISTAS.admin) {
         montarConmutador();
         mostrarVista('admin');
       } else {

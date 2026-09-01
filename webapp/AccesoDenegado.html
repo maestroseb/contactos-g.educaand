@@ -12,17 +12,22 @@
   </div>
   <main>
     <div class="card">
-      <h2>No perteneces a este claustro</h2>
-      <p class="desc" style="margin-bottom:10px">
-        Esta aplicación es para el profesorado del
-        <b><?= nombreCentro ? nombreCentro : 'centro' ?></b>.
-        Tu cuenta (<b><?= email ?></b>) no figura en el grupo del profesorado que
-        administra el centro, así que no puedes acceder ni sincronizar sus contactos.
-      </p>
-      <p class="note">
-        Si crees que es un error o te acabas de incorporar, ponte en contacto con la
-        persona administradora del centro para que te añada al grupo del profesorado.
-      </p>
+      <? if (motivo) { ?>
+        <h2>Un momento…</h2>
+        <p class="desc" style="margin-bottom:10px"><?= motivo ?></p>
+      <? } else { ?>
+        <h2>No perteneces a este claustro</h2>
+        <p class="desc" style="margin-bottom:10px">
+          Esta aplicación es para el profesorado del
+          <b><?= nombreCentro ? nombreCentro : 'centro' ?></b>.
+          Tu cuenta (<b><?= email ?></b>) no figura en el claustro que
+          administra el centro, así que no puedes acceder ni sincronizar sus contactos.
+        </p>
+        <p class="note">
+          Si crees que es un error o te acabas de incorporar, ponte en contacto con la
+          persona administradora del centro para que te añada al claustro.
+        </p>
+      <? } ?>
     </div>
   </main>
 </body>

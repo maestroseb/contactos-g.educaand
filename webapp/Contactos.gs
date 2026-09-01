@@ -18,9 +18,10 @@
 function sincronizar(opciones) {
   opciones = opciones || { incluirCentro: true, incluirPropios: true };
 
-  // Comprobación de pertenencia al grupo del profesorado (si está configurado).
-  const correoGrupo = correoGrupoProfesorado_();
-  if (opciones.incluirCentro && correoGrupo && !esMiembroDelGrupo_(correoUsuarioActual_(), correoGrupo)) {
+  // Para sincronizar los contactos del centro hay que pertenecer al claustro
+  // (grupo de Google o lista administrada). El admin siempre puede.
+  const email = correoUsuarioActual_();
+  if (opciones.incluirCentro && !esAdmin_(email) && !esMiembroClaustro_(email)) {
     throw new Error('NO_MIEMBRO');
   }
 

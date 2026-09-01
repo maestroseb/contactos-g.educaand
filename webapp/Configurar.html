@@ -1,0 +1,149 @@
+<script>
+/**
+ * Asistente de configuración inicial (solo admin, primer uso).
+ * Registra window.VISTAS.configurar.render(estado).
+ */
+window.VISTAS = window.VISTAS || {};
+window.VISTAS.configurar = {
+  render: function (estado) {
+    var app = document.getElementById('app');
+    app.innerHTML = '<div class="card"><p class="muted">Cargando asistente…</p></div>';
+
+    google.script.run
+      .withSuccessHandler(function (cfgEstado) { pintar(cfgEstado); })
+      .withFailureHandler(function (e) {
+        app.innerHTML = '<div class="card"><p class="status err">' + esc(mensajeError(e)) + '</p></div>';
+      })
+      .getEstadoConfig();
+
+    function pintar(s) {
+      var c = s.config || {};
+      var d = s.defaults || {};
+      var especialidades = (c.especialidades || d.especialidades || []).join('\n');
+      var etiquetas = (c.etiquetas || d.etiquetas || []).join('\n');
+      var extras = (c.miembrosExtra || []).join('\n');
+
+      app.innerHTML = [
+        '<div class="card">',
+          '<h2>Bienvenido/a. Vamos a configurar tu centro</h2>',
+          '<p class="desc">Eres el administrador (<b>', esc(s.adminEmail), '</b>). Rellena estos datos una vez; ',
+          'después podrás cambiarlos desde el panel. Nada de esto toca ninguna hoja de cálculo.</p>',
+        '</div>',
+
+        '<div class="card">',
+          '<h2>1 · Centro</h2>',
+          '<p class="desc">Escribe el código de centro para verificarlo.</p>',
+          '<div class="row">',
+            '<input id="codigo" placeholder="Código (8 dígitos)" value="', esc(c.codigoCentro || ''), '" ',
+              'style="', inputCss(), 'max-width:200px">',
+            '<button id="btnVerificar">Verificar</button>',
+          '</div>',
+          '<p class="status" id="stCentro"></p>',
+          '<p class="desc" style="margin:12px 0 4px">Nombre del centro</p>',
+          '<input id="nombre" placeholder="Nombre del centro" value="', esc(c.nombreCentro || ''), '" style="', inputCss(), '">',
+        '</div>',
+
+        '<div class="card">',
+          '<h2>2 · Especialidades / Departamentos</h2>',
+          '<p class="desc">Una por línea. Puedes editarlas.</p>',
+          '<textarea id="especialidades" rows="6" style="', inputCss(), 'font-family:inherit">', esc(especialidades), '</textarea>',
+        '</div>',
+
+        '<div class="card">',
+          '<h2>3 · Etiquetas sugeridas</h2>',
+          '<p class="desc">Etiquetas que usarás para clasificar (Claustro, Equipo Directivo, cargos…). Una por línea.</p>',
+          '<textarea id="etiquetas" rows="5" style="', inputCss(), 'font-family:inherit">', esc(etiquetas), '</textarea>',
+        '</div>',
+
+        '<div class="card">',
+          '<h2>4 · Quién forma el claustro</h2>',
+          '<p class="desc">Controla quién puede entrar y sincronizar. Puedes usar las dos opciones a la vez.</p>',
+          '<label class="switch" style="margin-bottom:10px">',
+            '<input type="checkbox" id="usarGrupo" ', (c.usarGrupo !== false ? 'checked' : ''), '> ',
+            'Usar un <b style="margin:0 4px">grupo de Google</b> del profesorado',
+          '</label>',
+          '<input id="grupo" placeholder="correo-del-grupo@g.educaand.es" value="', esc(c.grupoProfesorado || ''), '" style="', inputCss(), '">',
+          '<label class="switch" style="margin:16px 0 10px">',
+            '<input type="checkbox" id="usarLista" ', (c.usarLista !== false ? 'checked' : ''), '> ',
+            'Usar la <b style="margin:0 4px">lista de personas</b> que yo administro',
+          '</label>',
+          '<p class="desc" style="margin:0 0 6px">La lista se forma con los contactos del claustro que cargues (paso 5). Aquí puedes añadir correos extra que deban tener acceso aunque no sean contactos (uno por línea):</p>',
+          '<textarea id="extras" rows="3" placeholder="correo1@g.educaand.es" style="', inputCss(), 'font-family:inherit">', esc(extras), '</textarea>',
+        '</div>',
+
+        '<div class="card">',
+          '<h2>5 · Cargar el claustro (opcional ahora)</h2>',
+          '<p class="desc">Pega aquí las filas exportadas de Séneca (Apellidos, Nombre ⇥ Correo ⇥ Teléfono ⇥ Especialidad ⇥ Etiquetas). Podrás hacerlo también luego desde el panel.</p>',
+          '<textarea id="pegado" rows="5" placeholder="Pérez García, Ana⇥ana@g.educaand.es⇥600...⇥Música⇥Claustro" style="', inputCss(), 'font-family:monospace;font-size:13px"></textarea>',
+          '<div class="row" style="margin-top:10px"><button id="btnImportar">Importar y guardar claustro</button></div>',
+          '<p class="status" id="stImport">', (s.numContactos ? s.numContactos + ' contactos ya guardados.' : ''), '</p>',
+        '</div>',
+
+        '<div class="card">',
+          '<div class="row"><button class="primary" id="btnGuardar" style="font-size:16px;padding:12px 22px">✅ Guardar configuración y activar</button></div>',
+          '<p class="status" id="stGuardar"></p>',
+        '</div>'
+      ].join('');
+
+      // Verificar centro
+      document.getElementById('btnVerificar').onclick = function () {
+        var codigo = document.getElementById('codigo').value.trim();
+        var st = document.getElementById('stCentro');
+        correr(this, st, 'Verificando…',
+          function (run) { run.verificarCentro(codigo); },
+          function (r, st) {
+            if (r.ok) {
+              document.getElementById('nombre').value = r.nombre;
+              setStatus(st, '✓ ' + r.nombre, 'ok');
+            } else {
+              setStatus(st, 'No está en el catálogo (provincia Almería por ahora). Escribe el nombre a mano abajo.', '');
+            }
+          });
+      };
+
+      // Importar claustro
+      document.getElementById('btnImportar').onclick = function () {
+        var texto = document.getElementById('pegado').value;
+        var st = document.getElementById('stImport');
+        if (!texto.trim()) { setStatus(st, 'Pega antes las filas del claustro.', 'err'); return; }
+        var btn = this;
+        correr(btn, st, 'Importando…',
+          function (run) { run.adminImportarPegado(texto); },
+          function (lista, st) {
+            google.script.run
+              .withSuccessHandler(function (n) { setStatus(st, 'Guardados ' + n + ' contactos del claustro.', 'ok'); })
+              .withFailureHandler(function (e) { setStatus(st, mensajeError(e), 'err'); })
+              .adminGuardarContactos(lista);
+          });
+      };
+
+      // Guardar configuración
+      document.getElementById('btnGuardar').onclick = function () {
+        var cfg = {
+          codigoCentro: document.getElementById('codigo').value.trim(),
+          nombreCentro: document.getElementById('nombre').value.trim(),
+          especialidades: lineas('especialidades'),
+          etiquetas: lineas('etiquetas'),
+          usarGrupo: document.getElementById('usarGrupo').checked,
+          grupoProfesorado: document.getElementById('grupo').value.trim(),
+          usarLista: document.getElementById('usarLista').checked,
+          miembrosExtra: lineas('extras')
+        };
+        var st = document.getElementById('stGuardar');
+        if (!cfg.nombreCentro) { setStatus(st, 'Falta el nombre del centro.', 'err'); return; }
+        if (!cfg.usarGrupo && !cfg.usarLista) { setStatus(st, 'Elige al menos una forma de definir el claustro (grupo o lista).', 'err'); return; }
+        correr(this, st, 'Guardando…',
+          function (run) { run.guardarConfiguracion(cfg); },
+          function () { location.reload(); });
+      };
+    }
+
+    function lineas(id) {
+      return document.getElementById(id).value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+    function inputCss() {
+      return 'width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--surface);color:var(--ink);';
+    }
+  }
+};
+</script>

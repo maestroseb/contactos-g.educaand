@@ -17,10 +17,11 @@
     <div class="card"><p class="muted">Cargando…</p></div>
   </main>
 
-  <!-- La vista de profesorado está siempre; la de admin solo si procede. -->
+  <!-- La vista de profesorado está siempre; admin y asistente solo si procede. -->
   <?!= include('Usuario') ?>
   <? if (esAdmin) { ?>
     <?!= include('Admin') ?>
+    <?!= include('Configurar') ?>
   <? } ?>
   <?!= include('Cliente') ?>
 </body>

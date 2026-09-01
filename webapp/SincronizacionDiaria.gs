@@ -17,9 +17,8 @@ function tieneSincronizacionDiaria() {
  * (mismo objeto que sincronizar()).
  */
 function activarSincronizacionDiaria(opciones) {
-  const correoGrupo = correoGrupoProfesorado_();
-  if (opciones && opciones.incluirCentro && correoGrupo &&
-      !esMiembroDelGrupo_(correoUsuarioActual_(), correoGrupo)) {
+  const email = correoUsuarioActual_();
+  if (opciones && opciones.incluirCentro && !esAdmin_(email) && !esMiembroClaustro_(email)) {
     throw new Error('NO_MIEMBRO');
   }
 
@@ -60,9 +59,8 @@ function ejecutarSincronizacionDiaria() {
     const raw = PropertiesService.getUserProperties().getProperty(CLAVE_OPCIONES_DIARIA_);
     const opciones = raw ? JSON.parse(raw) : { incluirCentro: true, incluirPropios: true };
 
-    const correoGrupo = correoGrupoProfesorado_();
-    if (opciones.incluirCentro && correoGrupo &&
-        !esMiembroDelGrupo_(correoUsuarioActual_(), correoGrupo)) {
+    const email = correoUsuarioActual_();
+    if (opciones.incluirCentro && !esAdmin_(email) && !esMiembroClaustro_(email)) {
       notificarBajaDelGrupo_();
       desactivarSincronizacionDiaria_();
       return;
