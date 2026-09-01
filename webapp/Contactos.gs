@@ -196,12 +196,67 @@ function eliminarGruposVacios_() {
 }
 
 /**
- * Fusiona contactos que comparten correo (portado de fusionarDuplicados()).
- * Se deja como stub delegando en la versión completa; incorporar la lógica
- * detallada del proyecto de hoja en la Fase 2.
+ * Fusiona contactos que comparten correo (portado de fusionarDuplicados()
+ * del proyecto de hoja). Reúne nombres, correos, teléfonos, organizaciones y
+ * grupos en el primer contacto, lo actualiza y elimina los duplicados.
  */
 function fusionarDuplicados_() {
-  // TODO(Fase 2): portar la fusión campo a campo de crearContactos.gs.
+  const existentes = obtenerTodosLosContactos_();
+  const porEmail = {};
+  existentes.forEach(c => {
+    (c.emailAddresses || []).forEach(e => {
+      const k = e.value.trim().toLowerCase();
+      (porEmail[k] = porEmail[k] || []).push(c);
+    });
+  });
+
+  Object.keys(porEmail).forEach(email => {
+    const contactos = porEmail[email];
+    if (contactos.length < 2) return;
+
+    const principal = contactos[0];
+    if (!principal.resourceName || !principal.etag) return;
+
+    for (let i = 1; i < contactos.length; i++) {
+      const dup = contactos[i];
+      fusionarCampo_(principal, dup, 'names', (n, arr) =>
+        arr.some(x => x.givenName === n.givenName && x.familyName === n.familyName));
+      fusionarCampo_(principal, dup, 'emailAddresses', (e, arr) =>
+        arr.some(x => x.value.toLowerCase() === e.value.toLowerCase()));
+      fusionarCampo_(principal, dup, 'phoneNumbers', (t, arr) => arr.some(x => x.value === t.value));
+      fusionarCampo_(principal, dup, 'organizations', (o, arr) => arr.some(x => x.name === o.name));
+      (dup.memberships || []).forEach(m => {
+        if (!m.contactGroupMembership) return;
+        const rn = m.contactGroupMembership.contactGroupResourceName.trim().toLowerCase();
+        principal.memberships = principal.memberships || [];
+        const existe = principal.memberships.some(x =>
+          x.contactGroupMembership &&
+          x.contactGroupMembership.contactGroupResourceName.trim().toLowerCase() === rn);
+        if (!existe) principal.memberships.push(m);
+      });
+    }
+
+    try {
+      People.People.updateContact(principal, principal.resourceName, {
+        updatePersonFields: 'names,emailAddresses,phoneNumbers,organizations,memberships'
+      });
+    } catch (e) {
+      Logger.log('No se pudo fusionar ' + email + ': ' + e.message);
+      return; // no borrar duplicados si falló la actualización
+    }
+
+    for (let i = 1; i < contactos.length; i++) {
+      try { People.People.deleteContact(contactos[i].resourceName); }
+      catch (e) { Logger.log('No se pudo eliminar duplicado: ' + e.message); }
+    }
+  });
+}
+
+/** Añade al contacto principal los valores de un campo del duplicado que falten. */
+function fusionarCampo_(principal, dup, campo, yaExiste) {
+  if (!dup[campo]) return;
+  principal[campo] = principal[campo] || [];
+  dup[campo].forEach(v => { if (!yaExiste(v, principal[campo])) principal[campo].push(v); });
 }
 
 function isValidEmail_(email) {

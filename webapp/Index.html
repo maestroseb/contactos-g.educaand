@@ -9,6 +9,7 @@
     <span style="font-size:22px">👥</span>
     <h1 id="tituloApp">Asistente de Contactos</h1>
     <span id="badgeRol" class="badge" hidden></span>
+    <span id="cambioVista"></span>
     <span class="who" id="quien"></span>
   </div>
 
@@ -16,8 +17,11 @@
     <div class="card"><p class="muted">Cargando…</p></div>
   </main>
 
-  <!-- Vista elegida en el servidor según el rol: 'Admin' o 'Usuario' -->
-  <?!= include(vista) ?>
+  <!-- La vista de profesorado está siempre; la de admin solo si procede. -->
+  <?!= include('Usuario') ?>
+  <? if (esAdmin) { ?>
+    <?!= include('Admin') ?>
+  <? } ?>
   <?!= include('Cliente') ?>
 </body>
 </html>

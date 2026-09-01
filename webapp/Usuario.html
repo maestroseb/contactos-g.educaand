@@ -1,9 +1,10 @@
 <script>
 /**
- * Vista del PROFESORADO. Define window.VISTA.render(estado), que Cliente.html
- * invoca tras cargar el estado inicial. Toda acción usa google.script.run.
+ * Vista del PROFESORADO. Registra window.VISTAS.usuario.render(estado), que
+ * Cliente.html invoca. Toda acción usa google.script.run.
  */
-window.VISTA = {
+window.VISTAS = window.VISTAS || {};
+window.VISTAS.usuario = {
   render: function (estado) {
     var app = document.getElementById('app');
     var grupos = estado.gruposCentro || [];
@@ -15,19 +16,32 @@ window.VISTA = {
         (estado.nombreCentro ? '<b>' + esc(estado.nombreCentro) + '</b>' : 'centro'),
         '. Elige qué grupos quieres sincronizar (si no marcas ninguno, se sincronizan todos).</p>',
         '<div class="groups" id="grupos">',
-          grupos.map(function (g, i) {
+          grupos.map(function (g) {
             return '<label><input type="checkbox" value="' + esc(g) + '"> ' + esc(g) + '</label>';
           }).join('') || '<span class="muted">El administrador aún no ha cargado grupos.</span>',
         '</div>',
-        '<div class="row">',
-          '<button class="primary" id="btnSyncCentro">🔁 Sincronizar contactos del centro</button>',
-        '</div>',
+        '<div class="row"><button class="primary" id="btnSyncCentro">🔁 Sincronizar contactos del centro</button></div>',
         '<p class="status" id="stCentro"></p>',
       '</div>',
 
       '<div class="card">',
+        '<h2>Mis contactos propios</h2>',
+        '<p class="desc">Contactos que añades tú y que se guardan solo en tu cuenta. Edítalos aquí y sincronízalos cuando quieras.</p>',
+        '<div class="tablewrap"><table id="tablaPropios"><thead><tr>',
+          '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th>',
+          '<th>Puesto</th><th>Grupos (coma)</th><th></th>',
+        '</tr></thead><tbody></tbody></table></div>',
+        '<div class="row" style="margin-top:12px">',
+          '<button id="btnAddPropio">＋ Añadir fila</button>',
+          '<button id="btnGuardarPropios">💾 Guardar</button>',
+          '<button class="primary" id="btnSyncPropios">🔁 Sincronizar mis contactos</button>',
+        '</div>',
+        '<p class="status" id="stPropios"></p>',
+      '</div>',
+
+      '<div class="card">',
         '<h2>Sincronización diaria automática</h2>',
-        '<p class="desc">Si la activas, tus contactos se actualizarán solos cada noche sin que hagas nada.</p>',
+        '<p class="desc">Si la activas, tus contactos (centro y propios) se actualizarán solos cada noche.</p>',
         '<div class="switch">',
           '<button id="btnDiaria" class="' + (estado.diariaActiva ? 'danger' : 'primary') + '">',
             (estado.diariaActiva ? '🔴 Desactivar sincronización diaria' : '🟢 Activar sincronización diaria'),
@@ -37,7 +51,7 @@ window.VISTA = {
       '</div>',
 
       '<div class="card">',
-        '<h2>Mis contactos</h2>',
+        '<h2>Gestionar mis contactos de Google</h2>',
         '<p class="desc">Trae tus contactos actuales de Google para revisarlos o eliminarlos.</p>',
         '<div class="row"><button id="btnTraer">👥 Traer mis contactos</button></div>',
         '<p class="status" id="stMis"></p>',
@@ -45,29 +59,45 @@ window.VISTA = {
       '</div>'
     ].join('');
 
-    // --- Sincronizar contactos del centro ---
+    // ---------- Contactos del centro ----------
     document.getElementById('btnSyncCentro').onclick = function () {
-      var seleccion = Array.prototype.slice
-        .call(document.querySelectorAll('#grupos input:checked'))
-        .map(function (c) { return c.value; });
+      var seleccion = campoChecks('#grupos input:checked');
       var st = document.getElementById('stCentro');
-      setStatus(st, 'Sincronizando… puede tardar un poco.', '');
-      this.disabled = true;
-      var btn = this;
-      google.script.run
-        .withSuccessHandler(function (r) {
-          btn.disabled = false;
-          setStatus(st, 'Hecho: ' + r.creados + ' creados, ' + r.actualizados +
-            ' actualizados, ' + r.sinCambios + ' sin cambios.', 'ok');
-        })
-        .withFailureHandler(function (e) {
-          btn.disabled = false;
-          setStatus(st, mensajeError(e), 'err');
-        })
-        .sincronizarAhora({ incluirCentro: true, incluirPropios: false, gruposCentro: seleccion });
+      correr(this, st, 'Sincronizando… puede tardar un poco.',
+        function (run) { run.sincronizarAhora({ incluirCentro: true, incluirPropios: false, gruposCentro: seleccion }); },
+        function (r, st) { setStatus(st, resumenTexto(r), 'ok'); });
     };
 
-    // --- Diaria ---
+    // ---------- Propios ----------
+    var tbody = document.querySelector('#tablaPropios tbody');
+    (estado.contactosPropios || []).forEach(function (c) { anadirFilaPropio(tbody, c); });
+    if (!tbody.children.length) anadirFilaPropio(tbody, {});
+
+    document.getElementById('btnAddPropio').onclick = function () { anadirFilaPropio(tbody, {}); };
+
+    document.getElementById('btnGuardarPropios').onclick = function () {
+      var st = document.getElementById('stPropios');
+      correr(this, st, 'Guardando…',
+        function (run) { run.guardarPropios(leerPropios(tbody)); },
+        function (r, st) { setStatus(st, 'Guardado (' + r.length + ').', 'ok'); });
+    };
+
+    document.getElementById('btnSyncPropios').onclick = function () {
+      var st = document.getElementById('stPropios');
+      var lista = leerPropios(tbody);
+      var btn = this;
+      // Guarda antes de sincronizar para no perder ediciones.
+      google.script.run
+        .withSuccessHandler(function () {
+          correr(btn, st, 'Sincronizando tus contactos…',
+            function (run) { run.sincronizarAhora({ incluirCentro: false, incluirPropios: true }); },
+            function (r, st) { setStatus(st, resumenTexto(r), 'ok'); });
+        })
+        .withFailureHandler(function (e) { setStatus(st, mensajeError(e), 'err'); })
+        .guardarPropios(lista);
+    };
+
+    // ---------- Diaria ----------
     document.getElementById('btnDiaria').onclick = function () {
       var st = document.getElementById('stDiaria');
       var activar = this.classList.contains('primary');
@@ -75,25 +105,18 @@ window.VISTA = {
       var btn = this;
       setStatus(st, 'Aplicando…', '');
       var run = google.script.run
-        .withSuccessHandler(function () {
-          btn.disabled = false;
-          location.reload();
-        })
+        .withSuccessHandler(function () { location.reload(); })
         .withFailureHandler(function (e) { btn.disabled = false; setStatus(st, mensajeError(e), 'err'); });
       if (activar) run.activarSincronizacionDiaria({ incluirCentro: true, incluirPropios: true });
       else run.desactivarSincronizacionDiaria();
     };
 
-    // --- Traer mis contactos ---
+    // ---------- Traer mis contactos ----------
     document.getElementById('btnTraer').onclick = function () {
       var st = document.getElementById('stMis');
-      setStatus(st, 'Cargando tus contactos…', '');
-      this.disabled = true;
-      var btn = this;
-      google.script.run
-        .withSuccessHandler(function (lista) { btn.disabled = false; pintarMisContactos(lista); setStatus(st, lista.length + ' contactos.', 'ok'); })
-        .withFailureHandler(function (e) { btn.disabled = false; setStatus(st, mensajeError(e), 'err'); })
-        .getMisContactos();
+      correr(this, st, 'Cargando tus contactos…',
+        function (run) { run.getMisContactos(); },
+        function (lista, st) { pintarMisContactos(lista); setStatus(st, lista.length + ' contactos.', 'ok'); });
     };
 
     function pintarMisContactos(lista) {
@@ -120,4 +143,27 @@ window.VISTA = {
     }
   }
 };
+
+/* -------- helpers de la vista de profesorado -------- */
+function anadirFilaPropio(tbody, c) {
+  var tr = document.createElement('tr');
+  var campos = ['nombre', 'apellidos', 'email', 'telefono', 'puesto', 'grupos'];
+  tr.innerHTML = campos.map(function (k) {
+    var v = k === 'grupos' ? (c.grupos || []).join(', ') : (c[k] || '');
+    return '<td><input data-k="' + k + '" value="' + esc(v) + '" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:5px 7px;background:var(--surface);color:var(--ink)"></td>';
+  }).join('') + '<td><button class="danger">✕</button></td>';
+  tr.querySelector('button').onclick = function () { tr.remove(); };
+  tbody.appendChild(tr);
+}
+function leerPropios(tbody) {
+  return Array.prototype.slice.call(tbody.querySelectorAll('tr')).map(function (tr) {
+    var o = { tipoEmail: 'Trabajo' };
+    Array.prototype.slice.call(tr.querySelectorAll('input')).forEach(function (inp) {
+      var k = inp.getAttribute('data-k');
+      if (k === 'grupos') o.grupos = inp.value.split(',').map(function (s) { return s.trim(); }).filter(String);
+      else o[k] = inp.value.trim();
+    });
+    return o;
+  }).filter(function (o) { return o.email || o.nombre; });
+}
 </script>

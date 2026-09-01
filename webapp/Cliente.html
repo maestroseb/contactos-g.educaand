@@ -18,22 +18,40 @@ function mensajeError(e) {
   if (m.indexOf('NO_AUTORIZADO') !== -1) return 'No tienes permisos de administrador.';
   return 'Se ha producido un error: ' + m;
 }
+/** Ejecuta una llamada al servidor deshabilitando el botón y pintando estado. */
+function correr(btn, st, cargando, runFn, okFn) {
+  if (btn) btn.disabled = true;
+  setStatus(st, cargando, '');
+  var runner = google.script.run
+    .withSuccessHandler(function (res) { if (btn) btn.disabled = false; okFn(res, st); })
+    .withFailureHandler(function (e) { if (btn) btn.disabled = false; setStatus(st, mensajeError(e), 'err'); });
+  runFn(runner);
+}
+function campoChecks(sel) {
+  return Array.prototype.slice.call(document.querySelectorAll(sel)).map(function (c) { return c.value; });
+}
+function resumenTexto(r) {
+  return 'Hecho: ' + r.creados + ' creados, ' + r.actualizados + ' actualizados, ' +
+    r.sinCambios + ' sin cambios' + (r.omitidos ? ', ' + r.omitidos + ' omitidos' : '') + '.';
+}
 
-/** Arranque: carga el estado y deja que la vista incluida se monte. */
+/** Arranque: carga el estado y monta la vista que corresponda. */
 document.addEventListener('DOMContentLoaded', function () {
   google.script.run
     .withSuccessHandler(function (estado) {
+      window.__estado = estado;
       document.getElementById('tituloApp').textContent = estado.nombreApp;
       document.getElementById('quien').textContent = estado.email || '';
       var badge = document.getElementById('badgeRol');
       badge.hidden = false;
       badge.textContent = estado.esAdmin ? 'Administrador' : 'Profesorado';
 
-      if (window.VISTA && typeof window.VISTA.render === 'function') {
-        window.VISTA.render(estado);
+      // El admin puede alternar entre su panel y la vista de profesorado.
+      if (estado.esAdmin && window.VISTAS && window.VISTAS.admin) {
+        montarConmutador();
+        mostrarVista('admin');
       } else {
-        document.getElementById('app').innerHTML =
-          '<div class="card"><p class="status err">No se pudo cargar la vista.</p></div>';
+        mostrarVista('usuario');
       }
     })
     .withFailureHandler(function (e) {
@@ -42,4 +60,30 @@ document.addEventListener('DOMContentLoaded', function () {
     })
     .getEstadoInicial();
 });
+
+function mostrarVista(cual) {
+  var vista = window.VISTAS && window.VISTAS[cual];
+  if (vista && typeof vista.render === 'function') {
+    vista.render(window.__estado);
+    marcarConmutador(cual);
+  } else {
+    document.getElementById('app').innerHTML =
+      '<div class="card"><p class="status err">No se pudo cargar la vista.</p></div>';
+  }
+}
+
+function montarConmutador() {
+  var cont = document.getElementById('cambioVista');
+  cont.innerHTML =
+    '<button id="vAdmin" style="padding:5px 12px">Panel admin</button>' +
+    '<button id="vUsuario" style="padding:5px 12px;margin-left:6px">Vista profesorado</button>';
+  document.getElementById('vAdmin').onclick = function () { mostrarVista('admin'); };
+  document.getElementById('vUsuario').onclick = function () { mostrarVista('usuario'); };
+}
+function marcarConmutador(cual) {
+  var a = document.getElementById('vAdmin'), u = document.getElementById('vUsuario');
+  if (!a || !u) return;
+  a.className = (cual === 'admin') ? 'primary' : '';
+  u.className = (cual === 'usuario') ? 'primary' : '';
+}
 </script>

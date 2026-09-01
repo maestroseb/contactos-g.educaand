@@ -32,6 +32,18 @@ const PARAMS = {
     configuracion: '⚙️ Configuración'
   },
 
+  /**
+   * Estructura de la pestaña ⬆️ Datos (para editarla desde el panel admin).
+   * Columnas: A Apellidos,Nombre | B Correo | C Teléfono | D Especialidad/DPTO |
+   * E-H Etiqueta 1..4. Los datos empiezan en la fila 3 (1 título, 2 cabeceras).
+   */
+  datosLayout: {
+    filaInicio: 3,
+    numColumnas: 8,
+    cabeceras: ['Apellidos, Nombre', 'Correo', 'Teléfono', 'Especialidad / DPTO',
+                'Etiqueta 1 | GRUPO', 'Etiqueta 2', 'Etiqueta 3', 'Etiqueta 4']
+  },
+
   /** Celdas de la pestaña ⚙️ Configuración (se mantienen las de la hoja actual). */
   config: {
     correoGrupoProfesorado: 'D4',   // correo del grupo del profesorado

@@ -79,6 +79,50 @@ function gruposDelCentro_() {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Edición de la lista central (⬆️ Datos) desde el panel admin        *
+ * ------------------------------------------------------------------ */
+
+/** Lee las filas editables de ⬆️ Datos (matriz de numColumnas por fila). */
+function leerFilasDatos_() {
+  const L = PARAMS.datosLayout;
+  const hoja = abrirHojaCentral_().getSheetByName(PARAMS.hojas.datos);
+  const ultima = hoja.getLastRow();
+  if (ultima < L.filaInicio) return [];
+  const n = ultima - L.filaInicio + 1;
+  return hoja.getRange(L.filaInicio, 1, n, L.numColumnas).getValues()
+    .filter(f => f.some(c => String(c).trim() !== ''));
+}
+
+/**
+ * Sobrescribe la zona de datos de ⬆️ Datos con las filas dadas.
+ * Limpia el rango anterior y escribe las nuevas (respeta numColumnas).
+ */
+function escribirFilasDatos_(filas) {
+  const L = PARAMS.datosLayout;
+  const hoja = abrirHojaCentral_().getSheetByName(PARAMS.hojas.datos);
+
+  // Normaliza cada fila a numColumnas.
+  const limpias = (filas || [])
+    .map(f => {
+      const fila = [];
+      for (let i = 0; i < L.numColumnas; i++) fila.push(f[i] != null ? f[i] : '');
+      return fila;
+    })
+    .filter(f => f.some(c => String(c).trim() !== ''));
+
+  // Borra el bloque anterior.
+  const ultima = hoja.getLastRow();
+  if (ultima >= L.filaInicio) {
+    hoja.getRange(L.filaInicio, 1, ultima - L.filaInicio + 1, L.numColumnas).clearContent();
+  }
+  // Escribe el nuevo.
+  if (limpias.length) {
+    hoja.getRange(L.filaInicio, 1, limpias.length, L.numColumnas).setValues(limpias);
+  }
+  return limpias.length;
+}
+
+/* ------------------------------------------------------------------ *
  *  Contactos PROPIOS de cada usuario (privados en sus UserProperties) *
  * ------------------------------------------------------------------ */
 

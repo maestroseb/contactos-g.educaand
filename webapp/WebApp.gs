@@ -61,7 +61,8 @@ function getEstadoInicial() {
     gruposCentro: gruposDelCentro_(),
     contactosPropios: leerContactosPropios_(),
     diariaActiva: tieneSincronizacionDiaria(),
-    hayGrupoProfesorado: !!correoGrupoProfesorado_()
+    hayGrupoProfesorado: !!correoGrupoProfesorado_(),
+    numColDatos: PARAMS.datosLayout.numColumnas
   };
 }
 
@@ -79,21 +80,22 @@ function guardarPropios(lista) {
 /* ------------------------- Endpoints de admin ------------------------ */
 
 /**
- * Lee la pestaña "⬆️ Datos" de la hoja central para editarla en el panel admin.
- * Devuelve una matriz de filas (tal cual).
+ * Lee la lista central (⬆️ Datos) para editarla en el panel admin.
+ * @return {Object} { cabeceras: string[], filas: any[][] }
  */
 function adminLeerDatos() {
   if (!esAdministrador_(correoUsuarioActual_())) throw new Error('NO_AUTORIZADO');
-  const hoja = abrirHojaCentral_().getSheetByName(PARAMS.hojas.datos);
-  return hoja.getDataRange().getValues();
+  return {
+    cabeceras: PARAMS.datosLayout.cabeceras,
+    filas: leerFilasDatos_()
+  };
 }
 
 /**
- * Guarda cambios en la pestaña "⬆️ Datos" de la hoja central.
- * TODO(Fase 4): validar y escribir el rango editado desde el panel admin.
+ * Guarda la lista central editada. `filas` es una matriz (una fila por
+ * contacto, columnas según datosLayout). Devuelve el nº de filas guardadas.
  */
 function adminGuardarDatos(filas) {
   if (!esAdministrador_(correoUsuarioActual_())) throw new Error('NO_AUTORIZADO');
-  // Implementación en la Fase 4.
-  return true;
+  return escribirFilasDatos_(filas);
 }

@@ -41,19 +41,30 @@ Es el mismo comportamiento que la hoja madre/hija: manda la pertenencia al grupo
 | `Index.html` | Shell de la página |
 | `AccesoDenegado.html` | Página para quien no pertenece al claustro |
 | `Estilos.html` | CSS (claro/oscuro) |
-| `Usuario.html` / `Admin.html` | Vistas (definen `window.VISTA.render`) |
+| `Usuario.html` / `Admin.html` | Vistas (registran `window.VISTAS.usuario` / `.admin`) |
 | `Cliente.html` | Arranque y utilidades del cliente |
 
 ## Estado actual (andamiaje)
 
-Funciona de punta a punta: detección de rol, vista de profesorado (sincronizar
-centro por grupos, diaria, traer/eliminar "mis contactos") y vista de admin en
-solo lectura. **Pendiente (marcado con `TODO`):**
+Funciona de punta a punta:
 
-- Edición en línea de la lista central desde el panel admin (`adminGuardarDatos`).
-- Portar la fusión de duplicados completa (`fusionarDuplicados_`).
-- Formulario de "mis contactos propios" en la vista de profesorado.
-- Conmutador de vistas para que el admin use también la vista de profesorado.
+- **Portero por grupo** en `doGet` (quien no pertenece al claustro no entra).
+- **Vista de profesorado**: sincronizar el centro por grupos, formulario de
+  *mis contactos propios* (editar + guardar + sincronizar), sincronización
+  diaria y gestión (traer/eliminar) de los contactos de Google.
+- **Vista de admin**: edición en línea de la lista central (`⬆️ Datos`) con
+  guardado, más sincronización en la propia cuenta.
+- **Conmutador de vistas** para que el admin alterne panel / vista profesorado.
+- **Fusión de duplicados** completa portada del proyecto de hoja.
+
+**Pendiente / mejoras:**
+
+- Edición en línea de los contactos ya existentes en "Mis contactos de Google"
+  (ahora solo se pueden traer y eliminar).
+- Ajustar `datosLayout` en `Config.gs` si la hoja real difiere (fila de inicio,
+  nº de columnas).
+- Probar el despliegue real y depurar (Apps Script no se puede ejecutar fuera
+  de Google).
 
 ## Puesta en marcha
 
