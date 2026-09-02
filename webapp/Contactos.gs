@@ -44,92 +44,141 @@ function sincronizar(opciones) {
 
 /**
  * Crea o actualiza los contactos (sin duplicar) y fusiona duplicados.
- * Equivalente a crearContactos() del proyecto de hoja.
+ *
+ * Primero decide todo en memoria (empareja por correo, no duplica, no pisa
+ * datos que la lista no trae) y solo AL FINAL envía los cambios en LOTES
+ * (batchCreate/batchUpdate, hasta 200 por llamada), con reintentos y caída a
+ * uno-a-uno si un lote falla. Así es rápido y a prueba de errores.
  */
 function procesarContactos_(filas) {
-  const resumen = { creados: 0, actualizados: 0, sinCambios: 0, omitidos: 0 };
+  const resumen = { creados: 0, actualizados: 0, sinCambios: 0, omitidos: 0, errores: 0 };
+  // No se toca el correo en las actualizaciones (es la clave de emparejamiento
+  // y así no se borran otros correos que tuviera el contacto).
+  const MASK_UPDATE = 'names,phoneNumbers,organizations,memberships';
 
   const contactosExistentes = obtenerTodosLosContactos_();
   const emailsExistentes = {};
   contactosExistentes.forEach(c => {
-    (c.emailAddresses || []).forEach(e => {
-      emailsExistentes[e.value.trim().toLowerCase()] = c;
-    });
+    (c.emailAddresses || []).forEach(e => { emailsExistentes[e.value.trim().toLowerCase()] = c; });
   });
 
   const gruposExistentes = {};
-  (People.ContactGroups.list().contactGroups || []).forEach(g => {
-    gruposExistentes[g.name] = g.resourceName;
-  });
+  (People.ContactGroups.list().contactGroups || []).forEach(g => { gruposExistentes[g.name] = g.resourceName; });
 
-  const procesados = new Set();
+  const procesados = {};
   const total = filas.length;
   let hechos = 0;
+  const aCrear = [];       // [{ contactPerson: persona }]
+  const aActualizar = [];  // [{ resourceName, persona }]
   escribirProgreso_('subiendo', 0, total);
 
   filas.forEach(f => {
     escribirProgreso_('subiendo', ++hechos, total);
     const email = (f.email || '').trim().toLowerCase();
     if (!email || !isValidEmail_(email)) { resumen.omitidos++; return; }
-    if (procesados.has(email)) { resumen.omitidos++; return; }
-    procesados.add(email);
-
-    const contacto = {
-      names: [{ givenName: f.nombre || '', familyName: f.apellidos || '' }],
-      emailAddresses: [{ type: f.tipoEmail || 'Trabajo', value: email }],
-      memberships: []
-    };
-    // Solo se aporta teléfono/organización si la lista los trae. Si no, más
-    // abajo se conservan los que ya tuviera el contacto (no se pisan).
-    if (f.telefono) contacto.phoneNumbers = [{ type: 'Movil', value: f.telefono }];
-    if (f.puesto) contacto.organizations = [{ name: f.puesto }];
+    if (procesados[email]) { resumen.omitidos++; return; }
+    procesados[email] = true;
 
     const grupos = (f.grupos || []).filter(String);
-    grupos.forEach(nombreGrupo => {
+    const nuevasMemb = grupos.map(nombreGrupo => {
       let idGrupo = gruposExistentes[nombreGrupo];
       if (!idGrupo) {
-        idGrupo = People.ContactGroups.create({ contactGroup: { name: nombreGrupo } }).resourceName;
+        idGrupo = conReintentos_(function () { return People.ContactGroups.create({ contactGroup: { name: nombreGrupo } }).resourceName; });
         gruposExistentes[nombreGrupo] = idGrupo;
       }
-      contacto.memberships.push({ contactGroupMembership: { contactGroupResourceName: idGrupo } });
+      return { contactGroupMembership: { contactGroupResourceName: idGrupo } };
     });
+
     const existente = emailsExistentes[email];
     if (existente) {
       // Actualización NO destructiva: lo que la lista no trae se conserva.
-      const campos = ['names', 'emailAddresses'];
-      if (!contacto.phoneNumbers && existente.phoneNumbers) contacto.phoneNumbers = existente.phoneNumbers;
-      if (!contacto.organizations && existente.organizations) contacto.organizations = existente.organizations;
-      if (contacto.phoneNumbers) campos.push('phoneNumbers');
-      if (contacto.organizations) campos.push('organizations');
-      // Si la lista no trae nombre, se conserva el que ya tuviera.
-      if (!f.nombre && !f.apellidos && existente.names) contacto.names = existente.names;
-      // Etiquetas: solo se actualizan si la lista trae alguna; si no, se
-      // conservan (no se quitan las etiquetas personales que ya tuvieras).
-      if (grupos.length > 0) campos.push('memberships');
-      else contacto.memberships = existente.memberships || [];
-
-      if (esContactoDiferente_(existente, contacto)) {
-        contacto.resourceName = existente.resourceName;
-        contacto.etag = existente.etag;
-        People.People.updateContact(contacto, existente.resourceName, { updatePersonFields: campos.join(',') });
-        resumen.actualizados++;
-      } else {
-        resumen.sinCambios++;
-      }
+      const persona = {
+        resourceName: existente.resourceName,
+        etag: existente.etag,
+        names: (f.nombre || f.apellidos) ? [{ givenName: f.nombre || '', familyName: f.apellidos || '' }] : (existente.names || []),
+        emailAddresses: existente.emailAddresses || [{ type: f.tipoEmail || 'Trabajo', value: email }],
+        phoneNumbers: f.telefono ? [{ type: 'Movil', value: f.telefono }] : (existente.phoneNumbers || []),
+        organizations: f.puesto ? [{ name: f.puesto }] : (existente.organizations || []),
+        memberships: grupos.length ? nuevasMemb : (existente.memberships || [])
+      };
+      if (esContactoDiferente_(existente, persona)) aActualizar.push({ resourceName: existente.resourceName, persona: persona });
+      else resumen.sinCambios++;
     } else {
-      if (grupos.length === 0) {
-        contacto.memberships.push({ contactGroupMembership: { contactGroupResourceName: 'contactGroups/myContacts' } });
-      }
-      People.People.createContact(contacto);
-      resumen.creados++;
+      const memb = grupos.length ? nuevasMemb
+        : [{ contactGroupMembership: { contactGroupResourceName: 'contactGroups/myContacts' } }];
+      const persona = {
+        names: [{ givenName: f.nombre || '', familyName: f.apellidos || '' }],
+        emailAddresses: [{ type: f.tipoEmail || 'Trabajo', value: email }],
+        memberships: memb
+      };
+      if (f.telefono) persona.phoneNumbers = [{ type: 'Movil', value: f.telefono }];
+      if (f.puesto) persona.organizations = [{ name: f.puesto }];
+      aCrear.push({ contactPerson: persona });
     }
   });
 
-  escribirProgreso_('fusionando', total, total);
-  eliminarGruposVacios_();
-  fusionarDuplicados_();
+  // --- Envío en lotes (a prueba de errores) ---
+  escribirProgreso_('guardando', 1, 1);
+
+  const fallCrear = ejecutarPorLotes_(aCrear, 200,
+    function (chunk) { People.People.batchCreateContacts({ contacts: chunk, readMask: 'names' }); },
+    function (item) { People.People.createContact(item.contactPerson); });
+  resumen.creados = aCrear.length - fallCrear.length;
+
+  const fallAct = ejecutarPorLotes_(aActualizar, 200,
+    function (chunk) {
+      const map = {};
+      chunk.forEach(function (u) { map[u.resourceName] = u.persona; });
+      People.People.batchUpdateContacts({ contacts: map, updateMask: MASK_UPDATE, readMask: 'names' });
+    },
+    function (u) { People.People.updateContact(u.persona, u.resourceName, { updatePersonFields: MASK_UPDATE }); });
+  resumen.actualizados = aActualizar.length - fallAct.length;
+  resumen.errores = fallCrear.length + fallAct.length;
+
+  escribirProgreso_('fusionando', 1, 1);
+  try { eliminarGruposVacios_(); } catch (e) { Logger.log('eliminarGruposVacios_: ' + e.message); }
+  try { fusionarDuplicados_(); } catch (e) { Logger.log('fusionarDuplicados_: ' + e.message); }
   limpiarProgreso_();
   return resumen;
+}
+
+/* --------------------- Ejecución por lotes a prueba de errores --------------------- */
+
+/** Reintenta fn con espera creciente ante errores transitorios (rate limit, 5xx). */
+function conReintentos_(fn, intentos) {
+  intentos = intentos || 4;
+  var espera = 600;
+  for (var i = 0; i < intentos; i++) {
+    try { return fn(); }
+    catch (e) {
+      if (i === intentos - 1) throw e;
+      Utilities.sleep(espera);
+      espera *= 2;
+    }
+  }
+}
+
+/**
+ * Procesa `items` en lotes de `tam`. Si un lote falla (tras reintentos), cae a
+ * procesar sus elementos UNO A UNO para que un solo contacto problemático no
+ * tumbe todo. Devuelve el array de elementos que fallaron incluso uno a uno.
+ */
+function ejecutarPorLotes_(items, tam, opLote, opUno) {
+  var fallidos = [];
+  for (var i = 0; i < items.length; i += tam) {
+    var chunk = items.slice(i, i + tam);
+    if (!chunk.length) continue;
+    var okLote = true;
+    try { conReintentos_(function () { opLote(chunk); }); }
+    catch (e) { okLote = false; Logger.log('Lote falló, cae a uno-a-uno: ' + e.message); }
+    if (!okLote) {
+      chunk.forEach(function (it) {
+        try { conReintentos_(function () { opUno(it); }, 2); }
+        catch (e2) { fallidos.push(it); Logger.log('Elemento falló: ' + e2.message); }
+      });
+    }
+  }
+  return fallidos;
 }
 
 /* --------------------------- Progreso de sincronización --------------------------- */
@@ -241,8 +290,14 @@ function eliminarGruposVacios_() {
  * Fusiona contactos que comparten correo (portado de fusionarDuplicados()
  * del proyecto de hoja). Reúne nombres, correos, teléfonos, organizaciones y
  * grupos en el primer contacto, lo actualiza y elimina los duplicados.
+ *
+ * Trabaja en LOTES a prueba de errores: primero prepara en memoria las
+ * fusiones, luego actualiza los principales con batchUpdateContacts y por
+ * último borra los duplicados con batchDeleteContacts. Solo se eliminan los
+ * duplicados cuyo principal se actualizó correctamente.
  */
 function fusionarDuplicados_() {
+  const MASK = 'names,emailAddresses,phoneNumbers,organizations,memberships';
   const existentes = obtenerTodosLosContactos_();
   const porEmail = {};
   existentes.forEach(c => {
@@ -252,6 +307,8 @@ function fusionarDuplicados_() {
     });
   });
 
+  // 1) Preparar fusiones en memoria: [{ resourceName, persona, duplicados:[rn] }]
+  const fusiones = [];
   Object.keys(porEmail).forEach(email => {
     const contactos = porEmail[email];
     if (contactos.length < 2) return;
@@ -259,8 +316,10 @@ function fusionarDuplicados_() {
     const principal = contactos[0];
     if (!principal.resourceName || !principal.etag) return;
 
+    const duplicados = [];
     for (let i = 1; i < contactos.length; i++) {
       const dup = contactos[i];
+      if (dup.resourceName) duplicados.push(dup.resourceName);
       fusionarCampo_(principal, dup, 'names', (n, arr) =>
         arr.some(x => x.givenName === n.givenName && x.familyName === n.familyName));
       fusionarCampo_(principal, dup, 'emailAddresses', (e, arr) =>
@@ -277,21 +336,37 @@ function fusionarDuplicados_() {
         if (!existe) principal.memberships.push(m);
       });
     }
-
-    try {
-      People.People.updateContact(principal, principal.resourceName, {
-        updatePersonFields: 'names,emailAddresses,phoneNumbers,organizations,memberships'
-      });
-    } catch (e) {
-      Logger.log('No se pudo fusionar ' + email + ': ' + e.message);
-      return; // no borrar duplicados si falló la actualización
-    }
-
-    for (let i = 1; i < contactos.length; i++) {
-      try { People.People.deleteContact(contactos[i].resourceName); }
-      catch (e) { Logger.log('No se pudo eliminar duplicado: ' + e.message); }
+    if (duplicados.length) {
+      fusiones.push({ resourceName: principal.resourceName, persona: principal, duplicados: duplicados });
     }
   });
+
+  if (!fusiones.length) return;
+
+  // 2) Actualizar los principales en lotes. Los que fallen no borran sus duplicados.
+  const fallidos = {};
+  ejecutarPorLotes_(fusiones, 200,
+    function (chunk) {
+      const map = {};
+      chunk.forEach(function (fu) { map[fu.resourceName] = fu.persona; });
+      People.People.batchUpdateContacts({ contacts: map, updateMask: MASK, readMask: 'names' });
+    },
+    function (fu) {
+      People.People.updateContact(fu.persona, fu.resourceName, { updatePersonFields: MASK });
+    }
+  ).forEach(function (fu) { fallidos[fu.resourceName] = true; });
+
+  // 3) Borrar en lotes los duplicados de los principales actualizados con éxito.
+  const aBorrar = [];
+  fusiones.forEach(function (fu) {
+    if (fallidos[fu.resourceName]) return;
+    fu.duplicados.forEach(function (rn) { aBorrar.push(rn); });
+  });
+  if (!aBorrar.length) return;
+
+  ejecutarPorLotes_(aBorrar, 200,
+    function (chunk) { People.People.batchDeleteContacts({ resourceNames: chunk }); },
+    function (rn) { People.People.deleteContact(rn); });
 }
 
 /** Añade al contacto principal los valores de un campo del duplicado que falten. */
