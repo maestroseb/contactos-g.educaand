@@ -68,7 +68,8 @@ function getEstadoInicial() {
     gruposCentro: gruposDelCentro_(),
     contactosPropios: leerContactosPropios_(),
     diariaActiva: tieneSincronizacionDiaria(),
-    etiquetasSugeridas: etiquetasSugeridas_()
+    etiquetasSugeridas: etiquetasSugeridas_(),
+    etiquetasCats: (getConfig_() && getConfig_().etiquetas) || {}
   };
 }
 

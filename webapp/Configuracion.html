@@ -90,10 +90,20 @@ function pintar(cont, estado, s){
       }
     };
     if(!cfg.nombreCentro){ alert('Falta el nombre del centro.'); return; }
+    var eraPend = !estado.configurado;
     this.disabled = true; this.textContent = 'Guardando…';
     google.script.run
-      .withSuccessHandler(function(){ recargarApp('configuracion'); })
-      .withFailureHandler(function(e){ floatBtn.disabled=false; floatBtn.textContent='Guardar configuración'; alert(mensajeError(e)); })
+      .withSuccessHandler(function(res){
+        if(eraPend){ recargarApp('configuracion'); return; }   // primera vez: sí recargamos para activar
+        // Actualiza el estado en memoria sin recargar la app.
+        ESTADO.nombreCentro = res.nombreCentro;
+        ESTADO.etiquetasCats = res.etiquetas;
+        ESTADO.etiquetasSugeridas = [].concat(res.etiquetas.grupo||[], res.etiquetas.departamentos||[], res.etiquetas.cargos||[], res.etiquetas.otros||[]);
+        var b=document.querySelector('.brand b'); if(b) b.textContent = res.nombreCentro || ESTADO.nombreApp;
+        floatBtn.disabled=false; floatBtn.hidden=true; floatBtn.innerHTML=icon('ok')+'Guardado';
+        setTimeout(function(){ floatBtn.innerHTML=icon('guardar')+'Guardar configuración'; }, 1500);
+      })
+      .withFailureHandler(function(e){ floatBtn.disabled=false; floatBtn.innerHTML=icon('guardar')+'Guardar configuración'; alert(mensajeError(e)); })
       .guardarConfiguracion(cfg);
   };
 }

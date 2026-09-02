@@ -1,213 +1,219 @@
 <script>
-/** Pestaña CONTACTOS DEL CENTRO (solo admin). Rejilla con columnas de etiqueta
- *  dinámicas y asignación de etiquetas en bloque. */
+/** Pestaña CONTACTOS DEL CENTRO (solo admin).
+ *  Etiquetas como chips de color; paleta coordinada con Configuración;
+ *  modo "asignar picando" (eliges una etiqueta y pinchas en las personas). */
 window.TABS = window.TABS || {};
 window.TABS.contactosCentro = {
   orden: 3, label: 'Contactos del centro', icono: 'claustro',
   titulo: 'Contactos del centro', sub: 'El claustro que sincroniza todo el profesorado',
   render: function (cont, estado) {
-    var NUM_MIN = 3;         // columnas de etiqueta mínimas
-    var numCols = NUM_MIN;   // columnas de etiqueta actuales
-    var conocidasBase = (estado.gruposCentro || []).concat(estado.etiquetasSugeridas || []);
+    var FILAS = [];        // {id,nombre,apellidos,email,telefono,puesto,grupos:[]}
+    var SEL = new Set();   // ids seleccionados
+    var armado = null;     // etiqueta armada
+    var seq = 0;
+    var cats = estado.etiquetasCats || {};
 
     cont.innerHTML = [
       '<div class="card">',
         '<h2>'+icon('claustro')+'Claustro'+(estado.nombreCentro?' de '+esc(estado.nombreCentro):'')+'</h2>',
-        '<p class="desc">Funciona como una hoja: cada celda de etiqueta es una etiqueta. Marca filas y aplica una etiqueta a todas de golpe, o usa ⤓ para rellenar una columna entera. Puedes copiar y pegar desde Excel/Séneca.</p>',
-        '<div class="bulkbar">',
-          '<input list="dl-etq" id="etqBulk" placeholder="Etiqueta…" autocomplete="off">',
-          '<button class="btn sm" id="bAplicar">'+icon('add')+'Añadir a seleccionadas</button>',
-          '<button class="btn sm" id="bQuitar">'+icon('borrar')+'Quitar de seleccionadas</button>',
-          '<span class="muted" id="selCount" style="margin-left:auto"></span>',
-        '</div>',
+        '<p class="desc">Elige una etiqueta abajo y <b>pincha en las personas</b> para asignársela (vuelve a pinchar para quitarla). También puedes marcar filas y aplicarla en bloque.</p>',
+        '<div class="palette" id="paleta"></div>',
         '<div id="gridZona"><p class="muted">Cargando claustro…</p></div>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir persona</button>',
-          '<button class="btn sm" id="bMasEtq">'+icon('add')+'Columna de etiqueta</button>',
           '<button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar claustro</button>',
           '<button class="btn danger" id="bVaciar" style="margin-left:auto">'+icon('borrar')+'Vaciar lista</button>',
         '</div>',
         '<p class="status" id="sAdmin"></p>',
-        '<datalist id="dl-etq"></datalist>',
       '</div>',
 
       '<div class="card">',
         '<h2>'+icon('importar')+'Importar desde Séneca</h2>',
-        '<p class="desc">Pega tu listado (columnas separadas por tabulador). Detecta el correo, el nombre («Apellidos, Nombre») y el puesto. Se añade a la rejilla; luego pulsa «Guardar claustro».</p>',
+        '<p class="desc">Pega tu listado (columnas por tabulador). Detecta correo, nombre y puesto. Se añade a la lista; luego pulsa «Guardar claustro».</p>',
         '<textarea id="pegado" rows="4" style="font-family:var(--mono);font-size:12.5px"></textarea>',
-        '<div class="row" style="margin-top:12px"><button class="btn" id="bImport">'+icon('importar')+'Añadir a la tabla</button></div>',
+        '<div class="row" style="margin-top:12px"><button class="btn" id="bImport">'+icon('importar')+'Añadir a la lista</button></div>',
         '<p class="status" id="sImport"></p>',
       '</div>'
     ].join('');
 
     var zona = cont.querySelector('#gridZona');
-    var etqBulk = cont.querySelector('#etqBulk');
 
-    // ---- carga inicial ----
     google.script.run
       .withSuccessHandler(function (lista) {
-        var filas = (lista || []).map(normaliza);
-        if (!filas.length) filas = [filaVacia()];
-        numCols = Math.max(NUM_MIN, maxLen(filas));
-        pintar(filas, new Set());
+        FILAS = (lista||[]).map(function(c){ return normaliza(c); });
+        if(!FILAS.length) FILAS = [filaVacia()];
+        pintarPaleta(); renderGrid();
       })
       .withFailureHandler(function (e) { zona.innerHTML = '<p class="status err">'+esc(mensajeError(e))+'</p>'; })
       .adminLeerContactos();
 
-    // ---- acciones que persisten (fuera de la rejilla) ----
-    cont.querySelector('#bAdd').onclick = function(){ var d=leerDOM(); d.filas.push(filaVacia()); pintar(d.filas, d.sel); };
-    cont.querySelector('#bMasEtq').onclick = function(){ var d=leerDOM(); numCols++; pintar(d.filas, d.sel); };
-    cont.querySelector('#bAplicar').onclick = function(){ aplicar(true); };
-    cont.querySelector('#bQuitar').onclick = function(){ aplicar(false); };
-
+    // acciones
+    cont.querySelector('#bAdd').onclick = function(){ FILAS.push(filaVacia()); renderGrid(); };
     cont.querySelector('#bGuardar').onclick = function(){
-      var filas = leerDOM().filas.map(paraGuardar).filter(function(f){ return f.email || f.nombre; });
+      var filas = FILAS.map(paraGuardar).filter(function(f){ return f.email||f.nombre; });
       correr(this, cont.querySelector('#sAdmin'), 'Guardando…',
         function(r){ r.adminGuardarContactos(filas); },
         function(n, st){ setStatus(st, 'Guardado: '+n+' personas en el claustro.', 'ok'); });
     };
-
     cont.querySelector('#bVaciar').onclick = function(){
-      if(!confirm('¿Vaciar TODA la lista del claustro?\n\nSolo borra la lista del centro; no elimina contactos de la cuenta de Google de nadie.')) return;
+      if(!confirm('¿Vaciar TODA la lista del claustro?\n\nSolo borra la lista del centro; no elimina contactos de Google de nadie.')) return;
       correr(this, cont.querySelector('#sAdmin'), 'Vaciando…',
         function(r){ r.adminGuardarContactos([]); },
-        function(n, st){ numCols=NUM_MIN; pintar([filaVacia()], new Set()); setStatus(st, 'Lista del claustro vaciada.', 'ok'); });
+        function(n, st){ FILAS=[filaVacia()]; SEL.clear(); pintarPaleta(); renderGrid(); setStatus(st, 'Lista del claustro vaciada.', 'ok'); });
     };
-
     cont.querySelector('#bImport').onclick = function(){
       var texto = cont.querySelector('#pegado').value, st = cont.querySelector('#sImport');
       if(!texto.trim()){ setStatus(st, 'Pega antes las filas.', 'err'); return; }
       correr(this, st, 'Procesando…',
         function(r){ r.adminImportarPegado(texto); },
         function(lista, st){
-          var d = leerDOM();
-          // Si solo hay una fila vacía, la sustituimos.
-          if(d.filas.length===1 && !d.filas[0].email && !d.filas[0].nombre) d.filas = [];
-          (lista||[]).forEach(function(c){ d.filas.push(normaliza(c)); });
-          numCols = Math.max(numCols, maxLen(d.filas));
-          pintar(d.filas, d.sel);
-          cont.querySelector('#pegado').value='';
+          if(FILAS.length===1 && !FILAS[0].email && !FILAS[0].nombre) FILAS=[];
+          (lista||[]).forEach(function(c){ FILAS.push(normaliza(c)); });
+          cont.querySelector('#pegado').value=''; pintarPaleta(); renderGrid();
           setStatus(st, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar claustro».', 'ok');
         });
     };
 
-    /* ================= helpers de estado ================= */
-    function normaliza(c){
-      return { nombre:c.nombre||'', apellidos:c.apellidos||'', email:c.email||'',
-        telefono:c.telefono||'', puesto:c.puesto||'', tipoEmail:'Trabajo', grupos:(c.grupos||[]).slice() };
-    }
-    function filaVacia(){ return { nombre:'', apellidos:'', email:'', telefono:'', puesto:'', tipoEmail:'Trabajo', grupos:[] }; }
-    function maxLen(filas){ return filas.reduce(function(m,f){ return Math.max(m, (f.grupos||[]).length); }, 0); }
-    function paraGuardar(f){ var g=(f.grupos||[]).map(function(x){return String(x).trim();}).filter(Boolean); return {nombre:f.nombre,apellidos:f.apellidos,email:f.email,telefono:f.telefono,puesto:f.puesto,tipoEmail:'Trabajo',grupos:g}; }
+    /* ---------- paleta ---------- */
+    function pintarPaleta(){
+      var pal = cont.querySelector('#paleta');
+      var orden = [['grupo','Grupo'],['departamentos','Departamentos'],['cargos','Cargos'],['otros','Otros']];
+      var enConfig = {};
+      var filasRows = orden.map(function(par){
+        var items = (cats[par[0]]||[]);
+        items.forEach(function(t){ enConfig[t.toLowerCase()]=true; });
+        if(!items.length) return '';
+        return '<div class="pal-row"><span class="pal-lbl">'+esc(par[1])+'</span><div class="pal-chips">'+
+          items.map(function(t){ return chipClic(t); }).join('')+'</div></div>';
+      }).join('');
+      // etiquetas en uso que no estén en la config
+      var usadas = {};
+      FILAS.forEach(function(f){ (f.grupos||[]).forEach(function(t){ if(t && !enConfig[t.toLowerCase()]) usadas[t]=true; }); });
+      var usoChips = Object.keys(usadas).sort();
+      var filaUso = usoChips.length ? '<div class="pal-row"><span class="pal-lbl">En uso</span><div class="pal-chips">'+usoChips.map(function(t){ return chipClic(t); }).join('')+'</div></div>' : '';
 
-    /** Lee la rejilla del DOM a un modelo (grupos posicional de numCols huecos). */
-    function leerDOM(){
-      var filas=[], sel=new Set();
-      Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr, idx){
-        var o={tipoEmail:'Trabajo', grupos:[]};
-        Array.prototype.forEach.call(tr.querySelectorAll('input[data-k]'), function(i){ o[i.getAttribute('data-k')]=i.value.trim(); });
-        Array.prototype.forEach.call(tr.querySelectorAll('input[data-tag]'), function(i){ o.grupos.push(i.value.trim()); });
-        filas.push(o);
-        var chk=tr.querySelector('.sel'); if(chk && chk.checked) sel.add(idx);
+      pal.innerHTML =
+        (filasRows||filaUso ? (filasRows+filaUso) : '<p class="muted" style="margin:2px 0">No hay etiquetas configuradas. Añádelas en la pestaña «Configuración».</p>')+
+        '<div class="pal-tools">'+
+          '<input id="etqLibre" placeholder="Otra etiqueta…" autocomplete="off">'+
+          '<button class="btn sm" id="bArmLibre">Usar esta</button>'+
+          '<span class="assign-banner" id="armBanner"></span>'+
+        '</div>';
+
+      Array.prototype.forEach.call(pal.querySelectorAll('.chip.clic'), function(ch){
+        ch.onclick = function(){ armar(ch.getAttribute('data-tag')); };
       });
-      return {filas:filas, sel:sel};
+      pal.querySelector('#bArmLibre').onclick = function(){
+        var v = pal.querySelector('#etqLibre').value.trim(); if(v) armar(v);
+      };
+      pal.querySelector('#etqLibre').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); var v=this.value.trim(); if(v) armar(v); } });
+      refrescarArmado();
     }
 
-    function aplicar(add){
-      var tag = etqBulk.value.trim();
-      var st = cont.querySelector('#sAdmin');
-      if(!tag){ setStatus(st, 'Escribe una etiqueta arriba.', 'err'); return; }
-      var d = leerDOM();
-      if(!d.sel.size){ setStatus(st, 'Marca antes alguna fila.', 'err'); return; }
-      d.sel.forEach(function(i){
-        var g=d.filas[i].grupos, low=tag.toLowerCase();
-        if(add){
-          if(g.map(function(x){return x.toLowerCase();}).indexOf(low)===-1){
-            var hueco=g.indexOf(''); if(hueco>=0) g[hueco]=tag; else g.push(tag);
-          }
-        } else {
-          for(var k=0;k<g.length;k++){ if(g[k].toLowerCase()===low) g[k]=''; }
-        }
+    function armar(tag){
+      armado = (armado && armado.toLowerCase()===tag.toLowerCase()) ? null : tag;
+      refrescarArmado();
+    }
+    function refrescarArmado(){
+      var pal = cont.querySelector('#paleta');
+      Array.prototype.forEach.call(pal.querySelectorAll('.chip.clic'), function(ch){
+        ch.classList.toggle('armed', armado && ch.getAttribute('data-tag').toLowerCase()===armado.toLowerCase());
       });
-      numCols = Math.max(numCols, maxLen(d.filas));
-      pintar(d.filas, d.sel);
-      setStatus(st, (add?'Etiqueta añadida a ':'Etiqueta quitada de ')+d.sel.size+' filas.', 'ok');
-    }
-
-    function rellenarColumna(j){
-      var d = leerDOM();
-      var v = d.filas.length ? (d.filas[0].grupos[j]||'') : '';
-      if(!v){ setStatus(cont.querySelector('#sAdmin'), 'Pon un valor en la 1ª fila de esa columna para rellenar hacia abajo.', 'err'); return; }
-      d.filas.forEach(function(f){ f.grupos[j]=v; });
-      pintar(d.filas, d.sel);
-    }
-
-    /* ================= pintado de la rejilla ================= */
-    function pintar(filas, selSet){
-      // datalist con etiquetas conocidas
-      var set={}; conocidasBase.forEach(function(t){ if(t) set[t]=true; });
-      filas.forEach(function(f){ (f.grupos||[]).forEach(function(t){ if(t) set[t]=true; }); });
-      cont.querySelector('#dl-etq').innerHTML = Object.keys(set).sort().map(function(t){ return '<option value="'+esc(t)+'">'; }).join('');
-
-      var thsEtq=''; for(var j=0;j<numCols;j++){
-        thsEtq += '<th>Etiqueta '+(j+1)+' <button class="fillbtn" data-fill="'+j+'" title="Rellenar toda la columna con el valor de la 1ª fila">'+icon('chevron','rot90')+'</button></th>';
+      var banner = pal.querySelector('#armBanner');
+      var tabla = zona.querySelector('table');
+      if(armado){
+        banner.innerHTML = 'Asignando <span class="chip solo" style="--h:'+hue(armado)+'">'+esc(armado)+'</span> · pincha en las filas. '+
+          '<button class="btn sm" id="bAplicarSel">Aplicar a seleccionadas</button>'+
+          '<button class="btn sm" id="bQuitarSel">Quitar de seleccionadas</button>'+
+          '<button class="btn ghost sm" id="bSalir">Salir</button>';
+        banner.querySelector('#bAplicarSel').onclick = function(){ aplicarSeleccion(true); };
+        banner.querySelector('#bQuitarSel').onclick = function(){ aplicarSeleccion(false); };
+        banner.querySelector('#bSalir').onclick = function(){ armado=null; refrescarArmado(); };
+        if(tabla) tabla.classList.add('asignando');
+      } else {
+        banner.innerHTML = '';
+        if(tabla) tabla.classList.remove('asignando');
       }
-      var html = '<div class="tablewrap"><table class="rejilla claustro"><thead><tr>'+
+    }
+    function aplicarSeleccion(add){
+      if(!SEL.size){ setStatus(cont.querySelector('#sAdmin'), 'Marca antes alguna fila.', 'err'); return; }
+      FILAS.forEach(function(f){ if(SEL.has(f.id)) toggleTag(f, armado, add); });
+      renderGrid();
+    }
+
+    /* ---------- rejilla ---------- */
+    function renderGrid(){
+      var html = '<div class="tablewrap"><table class="rejilla claustro'+(armado?' asignando':'')+'"><thead><tr>'+
         '<th class="sel-col"><input type="checkbox" class="selall" title="Marcar todas"></th>'+
-        '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th>'+thsEtq+'<th></th>'+
-        '</tr></thead><tbody>';
-      filas.forEach(function(f, idx){
-        var tags=''; for(var j=0;j<numCols;j++){ tags += '<td><input data-tag="'+j+'" list="dl-etq" autocomplete="off" value="'+esc(f.grupos[j]||'')+'"></td>'; }
-        html += '<tr'+(selSet && selSet.has(idx)?' class="marcada"':'')+'>'+
-          '<td class="sel-col"><input type="checkbox" class="sel"'+(selSet && selSet.has(idx)?' checked':'')+'></td>'+
-          '<td><input data-k="nombre" value="'+esc(f.nombre)+'"></td>'+
-          '<td><input data-k="apellidos" value="'+esc(f.apellidos)+'"></td>'+
-          '<td><input data-k="email" value="'+esc(f.email)+'"></td>'+
-          '<td><input data-k="telefono" value="'+esc(f.telefono)+'"></td>'+
-          '<td><input data-k="puesto" value="'+esc(f.puesto)+'"></td>'+
-          tags+
-          '<td class="act"><button class="btn danger sm icononly borrar" title="Quitar fila">'+icon('borrar')+'</button></td>'+
-        '</tr>';
-      });
-      html += '</tbody></table></div>';
+        '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas</th><th></th>'+
+        '</tr></thead><tbody>'+
+        FILAS.map(function(f){
+          return '<tr data-id="'+f.id+'"'+(SEL.has(f.id)?' class="marcada"':'')+'>'+
+            '<td class="sel-col"><input type="checkbox" class="sel"'+(SEL.has(f.id)?' checked':'')+'></td>'+
+            celdaTxt(f,'nombre')+celdaTxt(f,'apellidos')+celdaTxt(f,'email')+celdaTxt(f,'telefono')+celdaTxt(f,'puesto')+
+            '<td class="etqs"><div class="etq-cell">'+chipsDe(f)+'</div></td>'+
+            '<td class="act"><button class="btn danger sm icononly bdel" title="Quitar fila">'+icon('borrar')+'</button></td>'+
+          '</tr>';
+        }).join('')+'</tbody></table></div>';
       zona.innerHTML = html;
 
-      // wiring
+      var tabla = zona.querySelector('table');
+      // inputs de texto
+      Array.prototype.forEach.call(zona.querySelectorAll('input[data-k]'), function(inp){
+        inp.oninput = function(){ var f=fila(inp); if(f) f[inp.getAttribute('data-k')] = inp.value; };
+      });
+      // selección
       var selall = zona.querySelector('.selall');
-      selall.onchange = function(){ Array.prototype.forEach.call(zona.querySelectorAll('.sel'), function(c){ c.checked=selall.checked; c.closest('tr').classList.toggle('marcada', selall.checked); }); actualizarCount(); };
-      Array.prototype.forEach.call(zona.querySelectorAll('.sel'), function(c){ c.onchange=function(){ c.closest('tr').classList.toggle('marcada', c.checked); actualizarCount(); }; });
-      Array.prototype.forEach.call(zona.querySelectorAll('.borrar'), function(b){ b.onclick=function(){ b.closest('tr').remove(); actualizarCount(); }; });
-      Array.prototype.forEach.call(zona.querySelectorAll('.fillbtn'), function(b){ b.onclick=function(){ rellenarColumna(parseInt(b.getAttribute('data-fill'),10)); }; });
-      habilitarPegadoPos(zona.querySelector('tbody'));
-      actualizarCount();
+      selall.onchange = function(){ FILAS.forEach(function(f){ selall.checked?SEL.add(f.id):SEL.delete(f.id); }); renderGrid(); };
+      Array.prototype.forEach.call(zona.querySelectorAll('.sel'), function(c){
+        c.onchange = function(e){ e.stopPropagation(); var id=c.closest('tr').getAttribute('data-id'); c.checked?SEL.add(id):SEL.delete(id); c.closest('tr').classList.toggle('marcada', c.checked); };
+      });
+      // quitar fila
+      Array.prototype.forEach.call(zona.querySelectorAll('.bdel'), function(b){
+        b.onclick = function(e){ e.stopPropagation(); var id=b.closest('tr').getAttribute('data-id'); FILAS=FILAS.filter(function(f){return f.id!==id;}); SEL.delete(id); renderGrid(); };
+      });
+      // quitar etiqueta (x del chip)
+      Array.prototype.forEach.call(zona.querySelectorAll('.chip .x'), function(x){
+        x.onclick = function(e){ e.stopPropagation(); var f=fila(x); if(f){ toggleTag(f, x.getAttribute('data-x'), false); renderGrid(); } };
+      });
+      // clic en fila para asignar la etiqueta armada
+      Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
+        tr.addEventListener('click', function(e){
+          if(!armado) return;
+          if(e.target.closest('input, button, .x')) return;
+          var f = FILAS.filter(function(x){return x.id===tr.getAttribute('data-id');})[0];
+          if(f){ toggleTag(f, armado, null); renderGrid(); }
+        });
+      });
     }
 
-    function actualizarCount(){
-      var n = zona.querySelectorAll('.sel:checked').length;
-      cont.querySelector('#selCount').textContent = n ? (n+' seleccionada'+(n>1?'s':'')) : '';
+    function chipsDe(f){
+      var g = (f.grupos||[]).filter(Boolean);
+      if(!g.length) return '<span class="vacio">—</span>';
+      return g.map(function(t){
+        return '<span class="chip" style="--h:'+hue(t)+'">'+esc(t)+'<span class="x" data-x="'+esc(t)+'">'+cerrarSvg()+'</span></span>';
+      }).join('');
     }
+    function celdaTxt(f,k){ return '<td><input data-k="'+k+'" value="'+esc(f[k]||'')+'"></td>'; }
+    function fila(el){ var tr=el.closest('tr'); var id=tr.getAttribute('data-id'); return FILAS.filter(function(x){return x.id===id;})[0]; }
+
+    function toggleTag(f, tag, add){
+      f.grupos = f.grupos || [];
+      var i = f.grupos.map(function(x){return x.toLowerCase();}).indexOf(tag.toLowerCase());
+      var tiene = i !== -1;
+      var poner = (add===null) ? !tiene : add;
+      if(poner && !tiene) f.grupos.push(tag);
+      else if(!poner && tiene) f.grupos.splice(i,1);
+    }
+
+    /* ---------- helpers ---------- */
+    function normaliza(c){ return { id:'r'+(seq++), nombre:c.nombre||'', apellidos:c.apellidos||'', email:c.email||'', telefono:c.telefono||'', puesto:c.puesto||'', grupos:(c.grupos||[]).slice() }; }
+    function filaVacia(){ return { id:'r'+(seq++), nombre:'', apellidos:'', email:'', telefono:'', puesto:'', grupos:[] }; }
+    function paraGuardar(f){ return { nombre:f.nombre.trim(), apellidos:f.apellidos.trim(), email:f.email.trim(), telefono:f.telefono.trim(), puesto:f.puesto.trim(), tipoEmail:'Trabajo', grupos:(f.grupos||[]).map(function(x){return x.trim();}).filter(Boolean) }; }
+    function chipClic(t){ return '<span class="chip clic" data-tag="'+esc(t)+'" style="--h:'+hue(t)+'">'+esc(t)+'</span>'; }
+    function cerrarSvg(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'; }
   }
 };
 
-/** Pegado posicional: reparte texto (tab=columnas, saltos=filas) desde la celda
- *  donde se pega, respetando el orden visual de inputs de datos (sin la casilla). */
-function habilitarPegadoPos(tbody){
-  tbody.addEventListener('paste', function(e){
-    var inp=e.target; if(!inp || inp.tagName!=='INPUT' || inp.classList.contains('sel')) return;
-    var texto=(e.clipboardData||window.clipboardData).getData('text');
-    if(!texto || (texto.indexOf('\t')===-1 && texto.indexOf('\n')===-1)) return;
-    e.preventDefault();
-    var trs=Array.prototype.slice.call(tbody.querySelectorAll('tr'));
-    var tr=inp.closest('tr'), startRow=trs.indexOf(tr);
-    var inputsFila=function(t){ return Array.prototype.slice.call(t.querySelectorAll('input:not(.sel)')); };
-    var startCol=inputsFila(tr).indexOf(inp);
-    var lineas=texto.replace(/\r/g,'').split('\n'); if(lineas.length && lineas[lineas.length-1]==='') lineas.pop();
-    lineas.forEach(function(linea, r){
-      var fila=tbody.querySelectorAll('tr')[startRow+r];
-      if(!fila) return;
-      var ins=inputsFila(fila);
-      linea.split('\t').forEach(function(val, c){ var t=ins[startCol+c]; if(t) t.value=val.trim(); });
-    });
-  });
-}
-</script>
+/** Hue estable (0-359) a partir de una cadena. */
+function hue(s){ var h=0; s=String(s); for(var i=0;i<s.length;i++) h=(h*31 + s.charCodeAt(i))>>>0; return h%360; }
