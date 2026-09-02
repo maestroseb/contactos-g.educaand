@@ -100,7 +100,24 @@
   .tabbar button:focus-visible{outline:none; box-shadow:var(--ring); border-radius:var(--r-sm)}
   .tabbar .dot{width:7px; height:7px; border-radius:50%; background:var(--warn)}
 
-  .page{flex:1; width:100%; max-width:1060px; margin:0 auto; padding:30px 32px 64px}
+  .page{flex:1; width:100%; max-width:1280px; margin:0 auto; padding:30px 32px 64px}
+  /* Popover de selección de grupos */
+  .syncwrap{position:relative; display:inline-flex; gap:2px}
+  #hSyncMenu{padding:7px 8px}
+  .syncpop{position:absolute; top:calc(100% + 8px); right:0; z-index:50; width:252px;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--sh-lg); padding:12px}
+  .syncpop-tit{font-weight:600; font-size:13px; margin-bottom:8px}
+  .syncpop-list{display:flex; flex-direction:column; gap:6px; max-height:230px; overflow-y:auto; margin-bottom:8px}
+  .syncpop label{display:flex; gap:8px; align-items:center; font-size:13.5px; cursor:pointer}
+  .syncpop input{accent-color:var(--primary); cursor:pointer}
+  .syncpop-prop{border-top:1px solid var(--border); padding-top:8px; margin-top:2px}
+  /* Configuración: cajas estrechas en fila con scroll horizontal */
+  .cfg-cols{display:flex; gap:14px; overflow-x:auto; padding-bottom:8px}
+  .cfg-col{flex:0 0 230px; min-width:230px; display:flex; flex-direction:column}
+  .cfg-col > span{font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px}
+  .cfg-col textarea{width:100%}
+  /* Botón Guardar flotante */
+  .floatsave{position:fixed; right:26px; bottom:26px; z-index:60; box-shadow:var(--sh-lg)}
   .pagehead{margin-bottom:22px}
   .pagehead h1{font-size:26px; font-weight:800; letter-spacing:-.02em}
   .pagehead .sub{color:var(--ink-soft); font-size:14.5px; margin-top:5px}
@@ -147,7 +164,7 @@
     border-radius:var(--r-sm); background:var(--surface-2); cursor:pointer; margin-bottom:10px}
   .check input{width:18px; height:18px; margin-top:1px; accent-color:var(--primary); cursor:pointer; flex:none}
   .check .t{font-size:14px} .check .t small{display:block; color:var(--ink-faint); font-weight:400; font-size:12.5px; margin-top:2px}
-  .fld .hint{display:block; margin-top:6px; font-size:12px; color:var(--ink-faint); line-height:1.45}
+  .fld .hint, .cfg-col .hint{display:block; margin-top:6px; font-size:12px; color:var(--ink-faint); line-height:1.45}
   .cfg-actions{display:flex; align-items:center; gap:12px; margin-bottom:2px}
   .cfg-actions .status{margin:0 auto 0 0}
   .cfg-centro{display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap}

@@ -162,7 +162,11 @@ function construirShell(estado, preferida){
             '<small>'+esc(estado.nombreCentro?estado.nombreApp:'Sin centro configurado')+'</small></span></div>'+
           '<div class="appbar-right">'+
             '<div class="hdr-sync">'+
-              '<button class="btn sm primary" id="hSync">'+icon('sync')+'Sincronizar</button>'+
+              '<div class="syncwrap">'+
+                '<button class="btn sm primary" id="hSync">'+icon('sync')+'Sincronizar</button>'+
+                '<button class="btn sm" id="hSyncMenu" title="Elegir grupos a sincronizar">'+icon('chevron','rot90')+'</button>'+
+                '<div class="syncpop" id="syncPop" hidden></div>'+
+              '</div>'+
               '<button class="btn sm'+(estado.diariaActiva?' danger':'')+'" id="hDiaria" title="Sincronización automática cada día">'+
                 icon('power')+(estado.diariaActiva?'Diaria: activada':'Diaria: desactivada')+'</button>'+
             '</div>'+
@@ -185,13 +189,36 @@ function construirShell(estado, preferida){
     b.onclick = function(){ irATab(b.getAttribute('data-tab')); };
   });
 
-  // Sincronización manual desde la cabecera (centro + propios).
-  document.getElementById('hSync').onclick = function(){
-    var area=document.getElementById('syncArea'); area.hidden=false;
-    lanzarSincronizacion(this, document.getElementById('syncStatus'),
-      {incluirCentro:true, incluirPropios:true},
-      function(){ setTimeout(function(){ area.hidden=true; }, 3000); });
+  // Sincronización manual desde la cabecera (todo: centro + propios).
+  document.getElementById('hSync').onclick = function(){ ejecutarSync({incluirCentro:true, incluirPropios:true}); };
+
+  // Popover para elegir qué grupos sincronizar.
+  var grupos = estado.gruposCentro || [];
+  var pop = document.getElementById('syncPop');
+  pop.innerHTML =
+    '<div class="syncpop-tit">Sincronizar…</div>'+
+    (grupos.length
+      ? '<div class="syncpop-list">'+grupos.map(function(g){ return '<label><input type="checkbox" class="gsel" value="'+esc(g)+'" checked> '+esc(g)+'</label>'; }).join('')+'</div>'
+      : '<p class="muted" style="margin:4px 0">Aún no hay grupos en el centro.</p>')+
+    '<label class="syncpop-prop"><input type="checkbox" id="pProp" checked> Mis contactos propios</label>'+
+    '<button class="btn primary sm" id="pSync" style="width:100%;justify-content:center;margin-top:8px">'+icon('sync')+'Sincronizar selección</button>';
+
+  document.getElementById('hSyncMenu').onclick = function(e){ e.stopPropagation(); pop.hidden = !pop.hidden; };
+  document.addEventListener('click', function(e){ if(!pop.hidden && !pop.contains(e.target) && e.target.id!=='hSyncMenu') pop.hidden=true; });
+  pop.addEventListener('click', function(e){ e.stopPropagation(); });
+  document.getElementById('pSync').onclick = function(){
+    var sel = Array.prototype.map.call(pop.querySelectorAll('.gsel:checked'), function(c){ return c.value; });
+    var propios = document.getElementById('pProp').checked;
+    var todosMarcados = sel.length === grupos.length;
+    pop.hidden = true;
+    ejecutarSync({ incluirCentro: sel.length>0, gruposCentro: todosMarcados?[]:sel, incluirPropios: propios });
   };
+
+  function ejecutarSync(opciones){
+    var area=document.getElementById('syncArea'); area.hidden=false;
+    lanzarSincronizacion(document.getElementById('hSync'), document.getElementById('syncStatus'),
+      opciones, function(){ setTimeout(function(){ area.hidden=true; }, 3000); });
+  }
   // Conmutar sincronización diaria desde la cabecera.
   document.getElementById('hDiaria').onclick = function(){
     var activar = !estado.diariaActiva; this.disabled=true;

@@ -27,12 +27,7 @@ function pintar(cont, estado, s){
   var pend = !estado.configurado;
 
   cont.innerHTML = [
-    '<div class="cfg-actions">',
-      '<span class="status" id="sGuardar"></span>',
-      '<button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar configuración</button>',
-    '</div>',
-
-    (pend ? '<div class="callout warn">'+icon('alerta')+'<span><b>Falta completar la configuración.</b> Rellena estos datos y pulsa «Guardar configuración» para activar el centro.</span></div>' : ''),
+    (pend ? '<div class="callout warn">'+icon('alerta')+'<span><b>Falta completar la configuración.</b> Rellena estos datos y pulsa «Guardar configuración» (abajo a la derecha) para activar el centro.</span></div>' : ''),
 
     '<div class="card">',
       '<h2>'+icon('centro')+'Centro</h2>',
@@ -48,39 +43,41 @@ function pintar(cont, estado, s){
     '</div>',
 
     '<div class="card">',
-      '<h2>'+icon('config')+'Especialidades / Departamentos</h2>',
-      '<p class="desc">La especialidad de cada docente (va al campo Organización del contacto). Una por línea.</p>',
-      '<textarea id="esp" rows="6">'+esc(esp)+'</textarea>',
+      '<h2>'+icon('config')+'Especialidades y etiquetas</h2>',
+      '<p class="desc">Especialidades (van al campo Organización) y etiquetas por categoría (sugerencias al etiquetar en «Contactos del centro»). Una por línea en cada caja; desplázate en horizontal si hace falta.</p>',
+      '<div class="cfg-cols">',
+        '<div class="cfg-col"><span>Especialidades / Dpto.</span>',
+          '<textarea rows="9" id="esp" placeholder="Infantil&#10;Primaria&#10;Inglés">'+esc(esp)+'</textarea></div>',
+        '<div class="cfg-col"><span>GRUPO (pertenencia)</span>',
+          '<textarea rows="9" id="etqGrupo" placeholder="# Claustro 24.25&#10;PAS&#10;4º ESO A&#10;FP Elect 1">'+esc(grupo)+'</textarea>',
+          '<small class="hint">Etiqueta principal. Profesorado: <b># Claustro 24.25</b>, <b>PAS</b>… (el «#» la sube arriba en Contacts). Alumnado, el curso: <b>4º ESO A</b>…</small></div>',
+        '<div class="cfg-col"><span>Departamentos</span>',
+          '<textarea rows="9" id="etqDeptos" placeholder="Ciencias&#10;Letras&#10;Idiomas">'+esc(deptos)+'</textarea></div>',
+        '<div class="cfg-col"><span>Cargos</span>',
+          '<textarea rows="9" id="etqCargos" placeholder="Dirección&#10;Jefatura de Estudios">'+esc(cargos)+'</textarea></div>',
+        '<div class="cfg-col"><span>Otros</span>',
+          '<textarea rows="9" id="etqOtros" placeholder="Bilingüe&#10;TDE&#10;Convivencia">'+esc(otros)+'</textarea></div>',
+      '</div>',
     '</div>',
 
-    '<div class="card">',
-      '<h2>'+icon('config')+'Etiquetas por categoría</h2>',
-      '<p class="desc">Sugerencias que aparecerán al etiquetar en «Contactos del centro». Una por línea en cada caja.</p>',
-      '<div class="grid2">',
-        '<label class="fld"><span>GRUPO (pertenencia del contacto)</span>',
-          '<textarea id="etqGrupo" rows="5" placeholder="# Claustro 24.25&#10;PAS&#10;4º ESO A&#10;FP Elect 1">'+esc(grupo)+'</textarea>',
-          '<small class="hint">La etiqueta principal de pertenencia. En profesorado: <b># Claustro 24.25</b>, <b>PAS</b>… (el «#» la sube arriba en Contacts). En alumnado, el curso: <b>4º ESO A</b>, <b>FP Elect 1</b>…</small></label>',
-        '<label class="fld"><span>DEPARTAMENTOS</span>',
-          '<textarea id="etqDeptos" rows="5" placeholder="Ciencias&#10;Letras&#10;Idiomas">'+esc(deptos)+'</textarea></label>',
-        '<label class="fld"><span>CARGOS</span>',
-          '<textarea id="etqCargos" rows="5" placeholder="Dirección&#10;Jefatura de Estudios&#10;Secretaría">'+esc(cargos)+'</textarea></label>',
-        '<label class="fld"><span>OTROS</span>',
-          '<textarea id="etqOtros" rows="5" placeholder="Bilingüe&#10;TDE&#10;Convivencia">'+esc(otros)+'</textarea></label>',
-      '</div>',
-    '</div>'
+    '<button class="btn primary floatsave" id="cfgSave" hidden>'+icon('guardar')+'Guardar configuración</button>'
   ].join('');
+
+  var floatBtn = cont.querySelector('#cfgSave');
+  function mostrarGuardar(){ floatBtn.hidden = false; }
+  cont.addEventListener('input', mostrarGuardar);
 
   cont.querySelector('#bVer').onclick = function(){
     var codigo = cont.querySelector('#codigo').value.trim();
     correr(this, cont.querySelector('#sCentro'), 'Verificando…',
       function(r){ r.verificarCentro(codigo); },
       function(res, st){
-        if(res.ok){ cont.querySelector('#nombre').value = res.nombre; setStatus(st, res.nombre, 'ok'); }
+        if(res.ok){ cont.querySelector('#nombre').value = res.nombre; setStatus(st, res.nombre, 'ok'); mostrarGuardar(); }
         else setStatus(st, 'No está en el catálogo. Escribe el nombre a mano.', '');
       });
   };
 
-  cont.querySelector('#bGuardar').onclick = function(){
+  floatBtn.onclick = function(){
     var cfg = {
       codigoCentro: cont.querySelector('#codigo').value.trim(),
       nombreCentro: cont.querySelector('#nombre').value.trim(),
@@ -92,11 +89,12 @@ function pintar(cont, estado, s){
         otros: lineasDe(cont.querySelector('#etqOtros').value)
       }
     };
-    var st = cont.querySelector('#sGuardar');
-    if(!cfg.nombreCentro){ setStatus(st, 'Falta el nombre del centro.', 'err'); return; }
-    correr(this, st, 'Guardando…',
-      function(r){ r.guardarConfiguracion(cfg); },
-      function(){ recargarApp('configuracion'); });
+    if(!cfg.nombreCentro){ alert('Falta el nombre del centro.'); return; }
+    this.disabled = true; this.textContent = 'Guardando…';
+    google.script.run
+      .withSuccessHandler(function(){ recargarApp('configuracion'); })
+      .withFailureHandler(function(e){ floatBtn.disabled=false; floatBtn.textContent='Guardar configuración'; alert(mensajeError(e)); })
+      .guardarConfiguracion(cfg);
   };
 }
 </script>
