@@ -80,9 +80,7 @@ window.TABS.contactosCentro = {
     };
 
     cont.querySelector('#bSyncMia').onclick = function(){
-      correr(this, cont.querySelector('#sMia'), 'Sincronizando…',
-        function(r){ r.sincronizarAhora({incluirCentro:true, incluirPropios:false}); },
-        function(res, st){ setStatus(st, resumenTexto(res), 'ok'); });
+      lanzarSincronizacion(this, cont.querySelector('#sMia'), {incluirCentro:true, incluirPropios:false});
     };
   }
 };

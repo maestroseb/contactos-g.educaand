@@ -63,8 +63,12 @@ function procesarContactos_(filas) {
   });
 
   const procesados = new Set();
+  const total = filas.length;
+  let hechos = 0;
+  escribirProgreso_('subiendo', 0, total);
 
   filas.forEach(f => {
+    escribirProgreso_('subiendo', ++hechos, total);
     const email = (f.email || '').trim().toLowerCase();
     if (!email || !isValidEmail_(email)) { resumen.omitidos++; return; }
     if (procesados.has(email)) { resumen.omitidos++; return; }
@@ -121,9 +125,34 @@ function procesarContactos_(filas) {
     }
   });
 
+  escribirProgreso_('fusionando', total, total);
   eliminarGruposVacios_();
   fusionarDuplicados_();
+  limpiarProgreso_();
   return resumen;
+}
+
+/* --------------------------- Progreso de sincronización --------------------------- */
+
+/** Guarda el progreso en la caché del usuario para que la barra lo consulte. */
+function escribirProgreso_(fase, hechos, total) {
+  try {
+    CacheService.getUserCache().put('progresoSync',
+      JSON.stringify({ fase: fase, hechos: hechos, total: total }), 600);
+  } catch (e) { /* la caché es best-effort */ }
+}
+
+/** Endpoint que consulta la barra de progreso. Devuelve {fase,hechos,total} o null. */
+function getProgresoSync() {
+  try {
+    const v = CacheService.getUserCache().get('progresoSync');
+    return v ? JSON.parse(v) : null;
+  } catch (e) { return null; }
+}
+
+/** Limpia el progreso al terminar. */
+function limpiarProgreso_() {
+  try { CacheService.getUserCache().remove('progresoSync'); } catch (e) {}
 }
 
 /* --------------------------- Mis Contactos --------------------------- */

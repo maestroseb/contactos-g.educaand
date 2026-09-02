@@ -63,6 +63,53 @@ function habilitarPegado(tbody, anadirFila){
   });
 }
 
+/**
+ * Lanza una sincronización mostrando una barra de progreso. La barra sondea
+ * getProgresoSync() mientras corre la sincronización (que va anotando el avance
+ * en caché). Si el sondeo no llega en paralelo, la barra se anima y salta a
+ * 100% al terminar.
+ */
+function lanzarSincronizacion(btn, st, opciones){
+  if(btn) btn.disabled = true;
+  var barra = document.createElement('div');
+  barra.className = 'progress indeterminate';
+  barra.innerHTML = '<div class="bar"></div>';
+  st.parentNode.insertBefore(barra, st);
+  var relleno = barra.querySelector('.bar');
+  var fin = false, determinada = false;
+  setStatus(st, 'Preparando…', 'busy');
+
+  var poll = setInterval(function(){
+    google.script.run.withSuccessHandler(function(p){
+      if(fin || !p) return;
+      if(p.fase === 'fusionando'){ setStatus(st, 'Evitando duplicados…', 'busy'); return; }
+      if(p.total){
+        if(!determinada){ barra.classList.remove('indeterminate'); determinada = true; }
+        var pct = Math.max(3, Math.round(p.hechos / p.total * 100));
+        relleno.style.width = pct + '%';
+        setStatus(st, 'Sincronizando… ' + p.hechos + ' de ' + p.total, 'busy');
+      }
+    }).getProgresoSync();
+  }, 1200);
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      fin = true; clearInterval(poll);
+      barra.classList.remove('indeterminate');
+      relleno.style.width = '100%';
+      setStatus(st, resumenTexto(res), 'ok');
+      setTimeout(function(){ if(barra.parentNode) barra.parentNode.removeChild(barra); }, 1400);
+      if(btn) btn.disabled = false;
+    })
+    .withFailureHandler(function(e){
+      fin = true; clearInterval(poll);
+      if(barra.parentNode) barra.parentNode.removeChild(barra);
+      setStatus(st, mensajeError(e), 'err');
+      if(btn) btn.disabled = false;
+    })
+    .sincronizarAhora(opciones);
+}
+
 /* ===================== Arranque ===================== */
 window.TABS = window.TABS || {};
 var ESTADO = null, TAB_ACTIVA = null;
