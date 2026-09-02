@@ -30,6 +30,39 @@ function correr(btn, st, cargando, runFn, okFn){
     .withFailureHandler(function(e){ if(btn) btn.disabled=false; setStatus(st, mensajeError(e), 'err'); }));
 }
 
+/** Orden de columnas de las rejillas de contactos. */
+var ORDEN_COLS = ['nombre','apellidos','email','telefono','puesto','grupos'];
+
+/**
+ * Habilita pegar en bloque (desde Excel/Séneca) en una rejilla: al pegar en una
+ * celda, reparte el texto (tabuladores = columnas, saltos = filas) creando filas
+ * nuevas si hacen falta. `anadirFila(tbody, obj)` añade una fila vacía.
+ */
+function habilitarPegado(tbody, anadirFila){
+  tbody.addEventListener('paste', function(e){
+    var inp = e.target;
+    if(!inp || inp.tagName !== 'INPUT') return;
+    var texto = (e.clipboardData || window.clipboardData).getData('text');
+    if(!texto || (texto.indexOf('\t') === -1 && texto.indexOf('\n') === -1)) return; // valor simple → pegado normal
+    e.preventDefault();
+    var startCol = ORDEN_COLS.indexOf(inp.getAttribute('data-k'));
+    if(startCol < 0) startCol = 0;
+    var trs = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+    var startRow = trs.indexOf(inp.closest('tr'));
+    var lineas = texto.replace(/\r/g,'').split('\n');
+    if(lineas.length && lineas[lineas.length-1] === '') lineas.pop();
+    lineas.forEach(function(linea, r){
+      while(tbody.querySelectorAll('tr').length <= startRow + r) anadirFila(tbody, {});
+      var fila = tbody.querySelectorAll('tr')[startRow + r];
+      var inputs = fila.querySelectorAll('input');
+      linea.split('\t').forEach(function(val, c){
+        var destino = inputs[startCol + c];
+        if(destino) destino.value = val.trim();
+      });
+    });
+  });
+}
+
 /* ===================== Arranque ===================== */
 window.TABS = window.TABS || {};
 var ESTADO = null, TAB_ACTIVA = null;

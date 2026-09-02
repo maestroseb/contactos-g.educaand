@@ -23,8 +23,8 @@ window.TABS.misContactos = {
       // Propios
       '<div class="card">',
         '<h2>'+icon('yo')+'Mis contactos propios</h2>',
-        '<p class="desc">Contactos que añades tú y que se guardan solo en tu cuenta.</p>',
-        '<div class="tablewrap"><table id="tPropios"><thead><tr>',
+        '<p class="desc">Contactos que añades tú y que se guardan solo en tu cuenta. Puedes copiar y pegar celdas desde una hoja de cálculo.</p>',
+        '<div class="tablewrap"><table id="tPropios" class="rejilla"><thead><tr>',
           '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas (coma)</th><th></th>',
         '</tr></thead><tbody></tbody></table></div>',
         '<div class="row" style="margin-top:14px">',
@@ -63,6 +63,7 @@ window.TABS.misContactos = {
     var tb = cont.querySelector('#tPropios tbody');
     (estado.contactosPropios||[]).forEach(function(c){ filaPropio(tb, c); });
     if(!tb.children.length) filaPropio(tb, {});
+    habilitarPegado(tb, filaPropio);
     cont.querySelector('#bAdd').onclick = function(){ filaPropio(tb, {}); };
     cont.querySelector('#bGuardar').onclick = function(){
       correr(this, cont.querySelector('#sPropios'), 'Guardando…',
@@ -103,7 +104,7 @@ function filaPropio(tb, c){
   tr.innerHTML = ks.map(function(k){
     var v = k==='grupos'?(c.grupos||[]).join(', '):(c[k]||'');
     return '<td><input data-k="'+k+'" value="'+esc(v)+'"></td>';
-  }).join('')+'<td><button class="btn danger sm icononly" title="Quitar">'+icon('borrar')+'</button></td>';
+  }).join('')+'<td class="act"><button class="btn danger sm icononly" title="Quitar fila">'+icon('borrar')+'</button></td>';
   tr.querySelector('button').onclick=function(){ tr.remove(); };
   tb.appendChild(tr);
 }

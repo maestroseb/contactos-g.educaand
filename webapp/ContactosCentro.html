@@ -8,7 +8,8 @@ window.TABS.contactosCentro = {
     cont.innerHTML = [
       '<div class="card">',
         '<h2>'+icon('claustro')+'Claustro'+(estado.nombreCentro?' de '+esc(estado.nombreCentro):'')+'</h2>',
-        '<p class="desc">Estos contactos los sincroniza el profesorado y, si usas la lista, también definen quién puede entrar. Edita, añade o pega desde Séneca.</p>',
+        '<p class="desc">Estos contactos los sincroniza el profesorado y, si usas la lista, también definen quién puede entrar. '+
+        'Funciona como una hoja de cálculo: <b>puedes copiar celdas de Excel/Séneca y pegarlas</b> directamente sobre la rejilla.</p>',
         '<div id="grid"><p class="muted">Cargando claustro…</p></div>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir persona</button>',
@@ -35,7 +36,11 @@ window.TABS.contactosCentro = {
 
     var tb = null;
     google.script.run
-      .withSuccessHandler(function (lista) { pintarGrid(cont, lista); tb = cont.querySelector('#grid tbody'); })
+      .withSuccessHandler(function (lista) {
+        pintarGrid(cont, lista);
+        tb = cont.querySelector('#grid tbody');
+        habilitarPegado(tb, filaClaustro);
+      })
       .withFailureHandler(function (e) { cont.querySelector('#grid').innerHTML = '<p class="status err">'+esc(mensajeError(e))+'</p>'; })
       .adminLeerContactos();
 
@@ -69,7 +74,7 @@ window.TABS.contactosCentro = {
 
 function pintarGrid(cont, lista){
   cont.querySelector('#grid').innerHTML =
-    '<div class="tablewrap"><table><thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas (coma)</th><th></th></tr></thead><tbody></tbody></table></div>';
+    '<div class="tablewrap"><table class="rejilla"><thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas (coma)</th><th></th></tr></thead><tbody></tbody></table></div>';
   var tb = cont.querySelector('#grid tbody');
   (lista||[]).forEach(function(c){ filaClaustro(tb, c); });
   if(!tb.children.length) filaClaustro(tb, {});
@@ -79,7 +84,7 @@ function filaClaustro(tb, c){
   tr.innerHTML = ks.map(function(k){
     var v = k==='grupos'?(c.grupos||[]).join(', '):(c[k]||'');
     return '<td><input data-k="'+k+'" value="'+esc(v)+'"></td>';
-  }).join('')+'<td><button class="btn danger sm icononly" title="Quitar">'+icon('borrar')+'</button></td>';
+  }).join('')+'<td class="act"><button class="btn danger sm icononly" title="Quitar fila">'+icon('borrar')+'</button></td>';
   tr.querySelector('button').onclick=function(){ tr.remove(); };
   tb.appendChild(tr);
 }
