@@ -73,10 +73,12 @@ function procesarContactos_(filas) {
     const contacto = {
       names: [{ givenName: f.nombre || '', familyName: f.apellidos || '' }],
       emailAddresses: [{ type: f.tipoEmail || 'Trabajo', value: email }],
-      phoneNumbers: [{ type: 'Movil', value: f.telefono || '' }],
-      organizations: [{ name: f.puesto || '' }],
       memberships: []
     };
+    // Solo se aporta teléfono/organización si la lista los trae. Si no, más
+    // abajo se conservan los que ya tuviera el contacto (no se pisan).
+    if (f.telefono) contacto.phoneNumbers = [{ type: 'Movil', value: f.telefono }];
+    if (f.puesto) contacto.organizations = [{ name: f.puesto }];
 
     const grupos = (f.grupos || []).filter(String);
     grupos.forEach(nombreGrupo => {
@@ -87,23 +89,33 @@ function procesarContactos_(filas) {
       }
       contacto.memberships.push({ contactGroupMembership: { contactGroupResourceName: idGrupo } });
     });
-    if (grupos.length === 0) {
-      contacto.memberships.push({ contactGroupMembership: { contactGroupResourceName: 'contactGroups/myContacts' } });
-    }
-
     const existente = emailsExistentes[email];
     if (existente) {
+      // Actualización NO destructiva: lo que la lista no trae se conserva.
+      const campos = ['names', 'emailAddresses'];
+      if (!contacto.phoneNumbers && existente.phoneNumbers) contacto.phoneNumbers = existente.phoneNumbers;
+      if (!contacto.organizations && existente.organizations) contacto.organizations = existente.organizations;
+      if (contacto.phoneNumbers) campos.push('phoneNumbers');
+      if (contacto.organizations) campos.push('organizations');
+      // Si la lista no trae nombre, se conserva el que ya tuviera.
+      if (!f.nombre && !f.apellidos && existente.names) contacto.names = existente.names;
+      // Etiquetas: solo se actualizan si la lista trae alguna; si no, se
+      // conservan (no se quitan las etiquetas personales que ya tuvieras).
+      if (grupos.length > 0) campos.push('memberships');
+      else contacto.memberships = existente.memberships || [];
+
       if (esContactoDiferente_(existente, contacto)) {
         contacto.resourceName = existente.resourceName;
         contacto.etag = existente.etag;
-        People.People.updateContact(contacto, existente.resourceName, {
-          updatePersonFields: 'names,emailAddresses,organizations,phoneNumbers,memberships'
-        });
+        People.People.updateContact(contacto, existente.resourceName, { updatePersonFields: campos.join(',') });
         resumen.actualizados++;
       } else {
         resumen.sinCambios++;
       }
     } else {
+      if (grupos.length === 0) {
+        contacto.memberships.push({ contactGroupMembership: { contactGroupResourceName: 'contactGroups/myContacts' } });
+      }
       People.People.createContact(contacto);
       resumen.creados++;
     }
