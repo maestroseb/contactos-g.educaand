@@ -88,7 +88,7 @@ function pintar(cont, estado, s){
     if(!cfg.usarGrupo && !cfg.usarLista){ setStatus(st, 'Elige al menos una forma de definir el claustro.', 'err'); return; }
     correr(this, st, 'Guardando…',
       function(r){ r.guardarConfiguracion(cfg); },
-      function(){ location.reload(); });
+      function(){ recargarApp('configuracion'); });
   };
 }
 function lineasDe(txt){ return String(txt||'').split('\n').map(function(s){return s.trim();}).filter(Boolean); }

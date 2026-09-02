@@ -34,16 +34,25 @@ function correr(btn, st, cargando, runFn, okFn){
 window.TABS = window.TABS || {};
 var ESTADO = null, TAB_ACTIVA = null;
 
-document.addEventListener('DOMContentLoaded', function(){
+document.addEventListener('DOMContentLoaded', function(){ recargarApp(); });
+
+/** (Re)carga el estado del servidor y pinta la app. Evita location.reload(),
+ *  que en el iframe de Apps Script puede dejar la pantalla en blanco. */
+function recargarApp(preferida){
   google.script.run
-    .withSuccessHandler(function(estado){ ESTADO=estado; construirShell(estado); })
-    .withFailureHandler(function(e){
-      document.getElementById('root').innerHTML =
-        '<div class="center-screen"><div class="panel"><div class="big">'+icon('alerta')+'</div>'+
-        '<h2>No se pudo cargar</h2><p>'+esc(mensajeError(e))+'</p></div></div>';
+    .withSuccessHandler(function(estado){
+      ESTADO=estado;
+      try { construirShell(estado, preferida); }
+      catch(err){ pantallaError(err); }
     })
+    .withFailureHandler(function(e){ pantallaError(e); })
     .getEstadoInicial();
-});
+}
+function pantallaError(e){
+  document.getElementById('root').innerHTML =
+    '<div class="center-screen"><div class="panel"><div class="big">'+icon('alerta')+'</div>'+
+    '<h2>No se pudo cargar</h2><p>'+esc(mensajeError(e))+'</p></div></div>';
+}
 
 function tabsOrdenadas(estado){
   return Object.keys(window.TABS)
@@ -52,7 +61,7 @@ function tabsOrdenadas(estado){
     .sort(function(a,b){ return (a.orden||99)-(b.orden||99); });
 }
 
-function construirShell(estado){
+function construirShell(estado, preferida){
   var tabs = tabsOrdenadas(estado);
   var inicial = estado.email ? estado.email.trim().charAt(0).toUpperCase() : '?';
   var necesitaConfig = estado.esAdmin && !estado.configurado;
@@ -84,8 +93,9 @@ function construirShell(estado){
     b.onclick = function(){ irATab(b.getAttribute('data-tab')); };
   });
 
-  // Pestaña inicial: si el admin no ha configurado, empezamos en Configuración.
-  var primera = necesitaConfig ? 'configuracion' : tabs[0].key;
+  // Pestaña inicial: la preferida (si existe), o Configuración si falta, o la 1ª.
+  var primera = (preferida && window.TABS[preferida] && (!window.TABS[preferida].adminOnly || estado.esAdmin))
+    ? preferida : (necesitaConfig ? 'configuracion' : tabs[0].key);
   irATab(primera);
 }
 
@@ -99,13 +109,10 @@ function irATab(key){
   document.getElementById('tb-sub').textContent = t.sub || '';
   var cont = document.getElementById('content');
   cont.innerHTML = '';
-  t.render(cont, ESTADO);
-}
-
-/** Recarga el estado desde el servidor y vuelve a pintar la pestaña actual. */
-function refrescarEstado(cb){
-  google.script.run.withSuccessHandler(function(estado){
-    ESTADO=estado; if(cb) cb(estado); else irATab(TAB_ACTIVA);
-  }).getEstadoInicial();
+  try { t.render(cont, ESTADO); }
+  catch(err){
+    cont.innerHTML = '<div class="card"><p class="status err">'+icon('alerta')+
+      '<span>Error al mostrar esta sección: '+esc(err&&err.message?err.message:err)+'</span></p></div>';
+  }
 }
 </script>

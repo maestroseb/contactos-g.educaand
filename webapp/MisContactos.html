@@ -83,7 +83,7 @@ window.TABS.misContactos = {
       var st=cont.querySelector('#sDiaria'), activar=this.classList.contains('primary'), btn=this;
       btn.disabled=true; setStatus(st,'Aplicando…','busy');
       var run = google.script.run
-        .withSuccessHandler(function(){ location.reload(); })
+        .withSuccessHandler(function(){ recargarApp('misContactos'); })
         .withFailureHandler(function(e){ btn.disabled=false; setStatus(st, mensajeError(e), 'err'); });
       if(activar) run.activarSincronizacionDiaria({incluirCentro:true, incluirPropios:true});
       else run.desactivarSincronizacionDiaria();
