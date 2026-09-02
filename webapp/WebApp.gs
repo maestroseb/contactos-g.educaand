@@ -67,8 +67,21 @@ function getEstadoInicial() {
     nombreCentro: nombreCentro_(),
     gruposCentro: gruposDelCentro_(),
     contactosPropios: leerContactosPropios_(),
-    diariaActiva: tieneSincronizacionDiaria()
+    diariaActiva: tieneSincronizacionDiaria(),
+    etiquetasSugeridas: etiquetasSugeridas_()
   };
+}
+
+/** Etiquetas sugeridas (unión de las categorías configuradas) para autocompletar. */
+function etiquetasSugeridas_() {
+  const c = getConfig_();
+  const e = c && c.etiquetas;
+  let lista = [];
+  if (Array.isArray(e)) lista = e;
+  else if (e && typeof e === 'object') Object.keys(e).forEach(k => { lista = lista.concat(e[k] || []); });
+  const set = {};
+  lista.forEach(t => { if (t) set[String(t).trim()] = true; });
+  return Object.keys(set);
 }
 
 /* ----------------------------- Asistente ----------------------------- */
@@ -100,10 +113,11 @@ function guardarConfiguracion(cfg) {
     nombreCentro: cfg.nombreCentro || actual.nombreCentro || '',
     especialidades: cfg.especialidades || actual.especialidades || DEFAULTS.especialidades,
     etiquetas: cfg.etiquetas || actual.etiquetas || DEFAULTS.etiquetas,
-    usarGrupo: cfg.usarGrupo !== undefined ? cfg.usarGrupo : (actual.usarGrupo !== false),
-    grupoProfesorado: cfg.grupoProfesorado !== undefined ? cfg.grupoProfesorado : (actual.grupoProfesorado || ''),
-    usarLista: cfg.usarLista !== undefined ? cfg.usarLista : (actual.usarLista !== false),
-    miembrosExtra: cfg.miembrosExtra || actual.miembrosExtra || [],
+    // Acceso: por defecto, quien esté en la lista de contactos del claustro.
+    usarLista: true,
+    // Se mantiene el grupo de Google si alguna versión anterior lo configuró.
+    usarGrupo: !!actual.grupoProfesorado,
+    grupoProfesorado: actual.grupoProfesorado || '',
     completo: true
   };
   setConfig_(nuevo);
@@ -127,6 +141,11 @@ function adminGuardarContactos(lista) {
 /** Parsea texto pegado (Séneca) y lo devuelve como contactos (sin guardar). */
 function adminImportarPegado(texto) {
   exigirAdmin_();
+  return parsearClaustroPegado_(texto);
+}
+
+/** Igual que adminImportarPegado pero para los contactos propios (cualquier usuario). */
+function parsearPegado(texto) {
   return parsearClaustroPegado_(texto);
 }
 

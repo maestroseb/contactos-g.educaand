@@ -8,7 +8,7 @@ window.TABS.contactosCentro = {
   render: function (cont, estado) {
     var NUM_MIN = 3;         // columnas de etiqueta mínimas
     var numCols = NUM_MIN;   // columnas de etiqueta actuales
-    var conocidasBase = (estado.gruposCentro || []).slice();
+    var conocidasBase = (estado.gruposCentro || []).concat(estado.etiquetasSugeridas || []);
 
     cont.innerHTML = [
       '<div class="card">',
@@ -37,13 +37,6 @@ window.TABS.contactosCentro = {
         '<textarea id="pegado" rows="4" style="font-family:var(--mono);font-size:12.5px"></textarea>',
         '<div class="row" style="margin-top:12px"><button class="btn" id="bImport">'+icon('importar')+'Añadir a la tabla</button></div>',
         '<p class="status" id="sImport"></p>',
-      '</div>',
-
-      '<div class="card">',
-        '<h2>'+icon('sync')+'Probar en mi cuenta</h2>',
-        '<p class="desc">Sube el claustro a tu propio Google Contacts para comprobar el resultado.</p>',
-        '<div class="row"><button class="btn primary" id="bSyncMia">'+icon('sync')+'Sincronizar en mi cuenta</button></div>',
-        '<p class="status" id="sMia"></p>',
       '</div>'
     ].join('');
 
@@ -96,10 +89,6 @@ window.TABS.contactosCentro = {
           cont.querySelector('#pegado').value='';
           setStatus(st, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar claustro».', 'ok');
         });
-    };
-
-    cont.querySelector('#bSyncMia').onclick = function(){
-      lanzarSincronizacion(this, cont.querySelector('#sMia'), {incluirCentro:true, incluirPropios:false});
     };
 
     /* ================= helpers de estado ================= */

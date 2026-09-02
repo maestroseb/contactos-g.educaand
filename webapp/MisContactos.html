@@ -1,63 +1,52 @@
 <script>
-/** Pestaña MIS CONTACTOS (todos los usuarios). */
+/** Pestaña MIS CONTACTOS (todos los usuarios). La sincronización manual y la
+ *  diaria están en la cabecera; aquí se gestionan y se añaden contactos. */
 window.TABS = window.TABS || {};
 window.TABS.misContactos = {
   orden: 1, label: 'Mis contactos', icono: 'yo',
-  titulo: 'Mis contactos', sub: 'Sincroniza los contactos del centro y gestiona los tuyos',
+  titulo: 'Mis contactos', sub: 'Gestiona tus contactos y añade los tuyos propios',
   render: function (cont, estado) {
-    var grupos = estado.gruposCentro || [];
     cont.innerHTML = [
-      // Centro
+      // Gestionar mis contactos de Google (arriba del todo)
       '<div class="card">',
-        '<h2>'+icon('centro')+'Contactos del centro</h2>',
-        '<p class="desc">Añade a tu cuenta de Google los contactos del ',
-        (estado.nombreCentro?'<b>'+esc(estado.nombreCentro)+'</b>':'centro'),
-        '. Marca los grupos que quieras (si no marcas ninguno, se sincronizan todos).</p>',
-        '<div class="chips" id="grupos">',
-          (grupos.length?grupos.map(function(g){return '<label><input type="checkbox" value="'+esc(g)+'">'+esc(g)+'</label>';}).join('')
-            :'<span class="muted">El administrador aún no ha cargado grupos.</span>'),
-        '</div>',
-        '<div class="row" style="margin-top:16px"><button class="btn primary" id="bCentro">'+icon('sync')+'Sincronizar contactos del centro</button></div>',
-        '<p class="status" id="sCentro"></p>',
+        '<h2>'+icon('correo')+'Gestionar mis contactos de Google</h2>',
+        '<p class="desc">Trae tus contactos actuales para revisarlos o eliminarlos. La sincronización está arriba, en «Sincronizar».</p>',
+        '<div class="row"><button class="btn" id="bTraer">'+icon('sync')+'Traer mis contactos</button></div>',
+        '<p class="status" id="sMis"></p><div id="tablaMis" style="margin-top:14px"></div>',
       '</div>',
-      // Propios
+
+      // Añadir contactos propios
       '<div class="card">',
         '<h2>'+icon('yo')+'Mis contactos propios</h2>',
-        '<p class="desc">Contactos que añades tú y que se guardan solo en tu cuenta. Puedes copiar y pegar celdas desde una hoja de cálculo.</p>',
+        '<p class="desc">Contactos que añades tú y que se guardan solo en tu cuenta. Se sincronizan junto con los del centro al pulsar «Sincronizar» arriba.</p>',
         '<div class="tablewrap"><table id="tPropios" class="rejilla"><thead><tr>',
           '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas (coma)</th><th></th>',
         '</tr></thead><tbody></tbody></table></div>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir fila</button>',
-          '<button class="btn" id="bGuardar">'+icon('guardar')+'Guardar</button>',
-          '<button class="btn primary" id="bSyncP">'+icon('sync')+'Sincronizar mis contactos</button>',
+          '<button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar mis contactos</button>',
         '</div>',
         '<p class="status" id="sPropios"></p>',
       '</div>',
-      // Diaria
+
+      // Importación inteligente para propios
       '<div class="card">',
-        '<h2>'+icon('power')+'Sincronización diaria automática</h2>',
-        '<p class="desc">Si la activas, tus contactos se actualizan solos cada noche.</p>',
-        '<div class="row"><button class="btn '+(estado.diariaActiva?'danger':'primary')+'" id="bDiaria">'+
-          icon('power')+(estado.diariaActiva?'Desactivar sincronización diaria':'Activar sincronización diaria')+'</button>',
-          '<span class="status" id="sDiaria" style="margin:0">'+(estado.diariaActiva?'Activada':'Desactivada')+'</span></div>',
-      '</div>',
-      // Google contacts
-      '<div class="card">',
-        '<h2>'+icon('correo')+'Gestionar mis contactos de Google</h2>',
-        '<p class="desc">Trae tus contactos actuales para revisarlos o eliminarlos.</p>',
-        '<div class="row"><button class="btn" id="bTraer">'+icon('sync')+'Traer mis contactos</button></div>',
-        '<p class="status" id="sMis"></p><div id="tablaMis" style="margin-top:14px"></div>',
+        '<h2>'+icon('importar')+'Importar contactos (pegar)</h2>',
+        '<p class="desc">Pega un listado (columnas separadas por tabulador). Detecta solo el correo, el nombre («Apellidos, Nombre») y el puesto. Se añaden a tu tabla de arriba; luego pulsa «Guardar mis contactos».</p>',
+        '<textarea id="pegado" rows="4" style="font-family:var(--mono);font-size:12.5px"></textarea>',
+        '<div class="row" style="margin-top:12px"><button class="btn" id="bImport">'+icon('importar')+'Añadir a la tabla</button></div>',
+        '<p class="status" id="sImport"></p>',
       '</div>'
     ].join('');
 
-    // Centro
-    cont.querySelector('#bCentro').onclick = function(){
-      var sel = Array.prototype.map.call(cont.querySelectorAll('#grupos input:checked'), function(c){return c.value;});
-      lanzarSincronizacion(this, cont.querySelector('#sCentro'), {incluirCentro:true, incluirPropios:false, gruposCentro:sel});
+    // Gestionar Google contacts
+    cont.querySelector('#bTraer').onclick = function(){
+      correr(this, cont.querySelector('#sMis'), 'Cargando tus contactos…',
+        function(r){ r.getMisContactos(); },
+        function(lista, st){ pintarMis(cont, lista); setStatus(st, lista.length+' contactos.', 'ok'); });
     };
 
-    // Propios
+    // Propios: rejilla
     var tb = cont.querySelector('#tPropios tbody');
     (estado.contactosPropios||[]).forEach(function(c){ filaPropio(tb, c); });
     if(!tb.children.length) filaPropio(tb, {});
@@ -66,31 +55,22 @@ window.TABS.misContactos = {
     cont.querySelector('#bGuardar').onclick = function(){
       correr(this, cont.querySelector('#sPropios'), 'Guardando…',
         function(r){ r.guardarPropios(leerPropios(tb)); },
-        function(res, st){ setStatus(st, 'Guardado ('+res.length+').', 'ok'); });
-    };
-    cont.querySelector('#bSyncP').onclick = function(){
-      var st = cont.querySelector('#sPropios'), btn=this, lista=leerPropios(tb);
-      google.script.run.withSuccessHandler(function(){
-        lanzarSincronizacion(btn, st, {incluirCentro:false, incluirPropios:true});
-      }).withFailureHandler(function(e){ setStatus(st, mensajeError(e), 'err'); }).guardarPropios(lista);
+        function(res, st){ setStatus(st, 'Guardado ('+res.length+'). Pulsa «Sincronizar» arriba para subirlos.', 'ok'); });
     };
 
-    // Diaria
-    cont.querySelector('#bDiaria').onclick = function(){
-      var st=cont.querySelector('#sDiaria'), activar=this.classList.contains('primary'), btn=this;
-      btn.disabled=true; setStatus(st,'Aplicando…','busy');
-      var run = google.script.run
-        .withSuccessHandler(function(){ recargarApp('misContactos'); })
-        .withFailureHandler(function(e){ btn.disabled=false; setStatus(st, mensajeError(e), 'err'); });
-      if(activar) run.activarSincronizacionDiaria({incluirCentro:true, incluirPropios:true});
-      else run.desactivarSincronizacionDiaria();
-    };
-
-    // Google contacts
-    cont.querySelector('#bTraer').onclick = function(){
-      correr(this, cont.querySelector('#sMis'), 'Cargando tus contactos…',
-        function(r){ r.getMisContactos(); },
-        function(lista, st){ pintarMis(cont, lista); setStatus(st, lista.length+' contactos.', 'ok'); });
+    // Importar (pegado inteligente)
+    cont.querySelector('#bImport').onclick = function(){
+      var texto = cont.querySelector('#pegado').value, st = cont.querySelector('#sImport');
+      if(!texto.trim()){ setStatus(st, 'Pega antes las filas.', 'err'); return; }
+      correr(this, st, 'Procesando…',
+        function(r){ r.parsearPegado(texto); },
+        function(lista, st){
+          // si solo hay una fila vacía, la quitamos
+          if(tb.children.length===1){ var v=leerPropios(tb); if(!v.length) tb.innerHTML=''; }
+          (lista||[]).forEach(function(c){ filaPropio(tb, c); });
+          cont.querySelector('#pegado').value='';
+          setStatus(st, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar mis contactos».', 'ok');
+        });
     };
   }
 };

@@ -13,53 +13,61 @@ window.TABS.configuracion = {
   }
 };
 
+function cat(e, k){ if(!e) return []; if(Array.isArray(e)) return (k==='grupo'?e:[]); return e[k]||[]; }
+function lineasDe(txt){ return String(txt||'').split('\n').map(function(s){return s.trim();}).filter(Boolean); }
+
 function pintar(cont, estado, s){
   var c = s.config || {}, d = s.defaults || {};
   var esp = (c.especialidades || d.especialidades || []).join('\n');
-  var etq = (c.etiquetas || d.etiquetas || []).join('\n');
-  var extras = (c.miembrosExtra || []).join('\n');
+  var eC = c.etiquetas, eD = d.etiquetas || {};
+  var grupo = (cat(eC,'grupo').length ? cat(eC,'grupo') : cat(eD,'grupo')).join('\n');
+  var deptos = (cat(eC,'departamentos').length ? cat(eC,'departamentos') : cat(eD,'departamentos')).join('\n');
+  var cargos = (cat(eC,'cargos').length ? cat(eC,'cargos') : cat(eD,'cargos')).join('\n');
+  var otros = (cat(eC,'otros').length ? cat(eC,'otros') : cat(eD,'otros')).join('\n');
   var pend = !estado.configurado;
 
   cont.innerHTML = [
-    (pend ? '<div class="callout warn">'+icon('alerta')+'<span><b>Falta completar la configuración.</b> Rellena estos datos y pulsa «Guardar» para activar el centro.</span></div>' : ''),
+    '<div class="cfg-actions">',
+      '<span class="status" id="sGuardar"></span>',
+      '<button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar configuración</button>',
+    '</div>',
+
+    (pend ? '<div class="callout warn">'+icon('alerta')+'<span><b>Falta completar la configuración.</b> Rellena estos datos y pulsa «Guardar configuración» para activar el centro.</span></div>' : ''),
 
     '<div class="card">',
       '<h2>'+icon('centro')+'Centro</h2>',
       '<p class="desc">Escribe el código de centro para verificarlo con el catálogo de Andalucía.</p>',
-      '<div class="row" style="align-items:flex-end">',
-        '<label class="fld" style="margin:0;max-width:220px;flex:1"><span>Código de centro</span>',
+      '<div class="cfg-centro">',
+        '<label class="fld"><span>Código de centro</span>',
           '<input id="codigo" placeholder="8 dígitos" value="'+esc(c.codigoCentro||'')+'"></label>',
         '<button class="btn" id="bVer">'+icon('ok')+'Verificar</button>',
+        '<label class="fld" style="flex:1;min-width:220px"><span>Nombre del centro</span>',
+          '<input id="nombre" placeholder="Nombre del centro" value="'+esc(c.nombreCentro||'')+'"></label>',
       '</div>',
       '<p class="status" id="sCentro"></p>',
-      '<label class="fld" style="margin-top:14px"><span>Nombre del centro</span>',
-        '<input id="nombre" placeholder="Nombre del centro" value="'+esc(c.nombreCentro||'')+'"></label>',
-    '</div>',
-
-    '<div class="grid2">',
-      '<div class="card"><h2>'+icon('config')+'Especialidades / Departamentos</h2>',
-        '<p class="desc">Una por línea.</p>',
-        '<textarea id="esp" rows="9">'+esc(esp)+'</textarea></div>',
-      '<div class="card"><h2>'+icon('config')+'Etiquetas sugeridas</h2>',
-        '<p class="desc">Para clasificar (Claustro, Equipo Directivo, cargos…). Una por línea.</p>',
-        '<textarea id="etq" rows="9">'+esc(etq)+'</textarea></div>',
     '</div>',
 
     '<div class="card">',
-      '<h2>'+icon('lock')+'Quién forma el claustro</h2>',
-      '<p class="desc">Controla quién puede entrar y sincronizar. Puedes activar las dos opciones a la vez.</p>',
-      '<label class="check"><input type="checkbox" id="usarGrupo" '+(c.usarGrupo!==false?'checked':'')+'>',
-        '<span class="t">Grupo de Google del profesorado<small>El acceso depende de la pertenencia a ese grupo.</small></span></label>',
-      '<label class="fld"><span>Correo del grupo</span>',
-        '<input id="grupo" placeholder="grupo@g.educaand.es" value="'+esc(c.grupoProfesorado||'')+'"></label>',
-      '<label class="check"><input type="checkbox" id="usarLista" '+(c.usarLista!==false?'checked':'')+'>',
-        '<span class="t">Lista de personas que administro<small>Se forma con los contactos del claustro (pestaña «Contactos del centro») más los correos extra de abajo.</small></span></label>',
-      '<label class="fld"><span>Correos con acceso extra (uno por línea)</span>',
-        '<textarea id="extras" rows="3" placeholder="persona@g.educaand.es">'+esc(extras)+'</textarea></label>',
+      '<h2>'+icon('config')+'Especialidades / Departamentos</h2>',
+      '<p class="desc">La especialidad de cada docente (va al campo Organización del contacto). Una por línea.</p>',
+      '<textarea id="esp" rows="6">'+esc(esp)+'</textarea>',
     '</div>',
 
-    '<div class="card"><div class="row"><button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar configuración</button></div>',
-      '<p class="status" id="sGuardar"></p></div>'
+    '<div class="card">',
+      '<h2>'+icon('config')+'Etiquetas por categoría</h2>',
+      '<p class="desc">Sugerencias que aparecerán al etiquetar en «Contactos del centro». Una por línea en cada caja.</p>',
+      '<div class="grid2">',
+        '<label class="fld"><span>GRUPO (pertenencia del contacto)</span>',
+          '<textarea id="etqGrupo" rows="5" placeholder="# Claustro 24.25&#10;PAS&#10;4º ESO A&#10;FP Elect 1">'+esc(grupo)+'</textarea>',
+          '<small class="hint">La etiqueta principal de pertenencia. En profesorado: <b># Claustro 24.25</b>, <b>PAS</b>… (el «#» la sube arriba en Contacts). En alumnado, el curso: <b>4º ESO A</b>, <b>FP Elect 1</b>…</small></label>',
+        '<label class="fld"><span>DEPARTAMENTOS</span>',
+          '<textarea id="etqDeptos" rows="5" placeholder="Ciencias&#10;Letras&#10;Idiomas">'+esc(deptos)+'</textarea></label>',
+        '<label class="fld"><span>CARGOS</span>',
+          '<textarea id="etqCargos" rows="5" placeholder="Dirección&#10;Jefatura de Estudios&#10;Secretaría">'+esc(cargos)+'</textarea></label>',
+        '<label class="fld"><span>OTROS</span>',
+          '<textarea id="etqOtros" rows="5" placeholder="Bilingüe&#10;TDE&#10;Convivencia">'+esc(otros)+'</textarea></label>',
+      '</div>',
+    '</div>'
   ].join('');
 
   cont.querySelector('#bVer').onclick = function(){
@@ -68,7 +76,7 @@ function pintar(cont, estado, s){
       function(r){ r.verificarCentro(codigo); },
       function(res, st){
         if(res.ok){ cont.querySelector('#nombre').value = res.nombre; setStatus(st, res.nombre, 'ok'); }
-        else setStatus(st, 'No está en el catálogo. Escribe el nombre a mano abajo.', '');
+        else setStatus(st, 'No está en el catálogo. Escribe el nombre a mano.', '');
       });
   };
 
@@ -77,19 +85,18 @@ function pintar(cont, estado, s){
       codigoCentro: cont.querySelector('#codigo').value.trim(),
       nombreCentro: cont.querySelector('#nombre').value.trim(),
       especialidades: lineasDe(cont.querySelector('#esp').value),
-      etiquetas: lineasDe(cont.querySelector('#etq').value),
-      usarGrupo: cont.querySelector('#usarGrupo').checked,
-      grupoProfesorado: cont.querySelector('#grupo').value.trim(),
-      usarLista: cont.querySelector('#usarLista').checked,
-      miembrosExtra: lineasDe(cont.querySelector('#extras').value)
+      etiquetas: {
+        grupo: lineasDe(cont.querySelector('#etqGrupo').value),
+        departamentos: lineasDe(cont.querySelector('#etqDeptos').value),
+        cargos: lineasDe(cont.querySelector('#etqCargos').value),
+        otros: lineasDe(cont.querySelector('#etqOtros').value)
+      }
     };
     var st = cont.querySelector('#sGuardar');
     if(!cfg.nombreCentro){ setStatus(st, 'Falta el nombre del centro.', 'err'); return; }
-    if(!cfg.usarGrupo && !cfg.usarLista){ setStatus(st, 'Elige al menos una forma de definir el claustro.', 'err'); return; }
     correr(this, st, 'Guardando…',
       function(r){ r.guardarConfiguracion(cfg); },
       function(){ recargarApp('configuracion'); });
   };
 }
-function lineasDe(txt){ return String(txt||'').split('\n').map(function(s){return s.trim();}).filter(Boolean); }
 </script>

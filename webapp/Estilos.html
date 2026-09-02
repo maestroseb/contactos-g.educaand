@@ -76,6 +76,13 @@
   .badge .ico{width:14px;height:14px}
   .avatar{width:36px; height:36px; border-radius:50%; flex:none; display:grid; place-items:center;
     background:linear-gradient(150deg,var(--primary),var(--primary-strong)); color:#fff; font-weight:700; font-size:15px}
+  .appbar-right{flex-wrap:wrap}
+  .appbar-right .sep{width:1px; height:24px; background:var(--border); margin:0 2px}
+  .hdr-sync{display:inline-flex; gap:8px; align-items:center; flex-wrap:wrap}
+  /* Cabecera + pestañas fijas al hacer scroll */
+  .topfixed{position:sticky; top:0; z-index:30}
+  .syncarea{padding:9px 30px; background:var(--surface); border-bottom:1px solid var(--border)}
+  .syncarea .status{margin:0}
 
   .tabbar{display:flex; gap:2px; background:var(--surface); padding:0 22px; border-bottom:1px solid var(--border);
     overflow-x:auto}
@@ -140,6 +147,12 @@
     border-radius:var(--r-sm); background:var(--surface-2); cursor:pointer; margin-bottom:10px}
   .check input{width:18px; height:18px; margin-top:1px; accent-color:var(--primary); cursor:pointer; flex:none}
   .check .t{font-size:14px} .check .t small{display:block; color:var(--ink-faint); font-weight:400; font-size:12.5px; margin-top:2px}
+  .fld .hint{display:block; margin-top:6px; font-size:12px; color:var(--ink-faint); line-height:1.45}
+  .cfg-actions{display:flex; align-items:center; gap:12px; margin-bottom:2px}
+  .cfg-actions .status{margin:0 auto 0 0}
+  .cfg-centro{display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap}
+  .cfg-centro > .fld{margin:0}
+  .cfg-centro > .fld:first-child{width:180px}
 
   /* chips */
   .chips{display:flex; flex-wrap:wrap; gap:8px}

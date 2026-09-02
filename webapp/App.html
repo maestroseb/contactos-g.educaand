@@ -69,7 +69,7 @@ function habilitarPegado(tbody, anadirFila){
  * en caché). Si el sondeo no llega en paralelo, la barra se anima y salta a
  * 100% al terminar.
  */
-function lanzarSincronizacion(btn, st, opciones){
+function lanzarSincronizacion(btn, st, opciones, onDone){
   if(btn) btn.disabled = true;
   var barra = document.createElement('div');
   barra.className = 'progress indeterminate';
@@ -100,12 +100,14 @@ function lanzarSincronizacion(btn, st, opciones){
       setStatus(st, resumenTexto(res), 'ok');
       setTimeout(function(){ if(barra.parentNode) barra.parentNode.removeChild(barra); }, 1400);
       if(btn) btn.disabled = false;
+      if(onDone) onDone(true);
     })
     .withFailureHandler(function(e){
       fin = true; clearInterval(poll);
       if(barra.parentNode) barra.parentNode.removeChild(barra);
       setStatus(st, mensajeError(e), 'err');
       if(btn) btn.disabled = false;
+      if(onDone) onDone(false);
     })
     .sincronizarAhora(opciones);
 }
@@ -153,17 +155,26 @@ function construirShell(estado, preferida){
 
   document.getElementById('root').innerHTML =
     '<div class="appwrap">'+
-      '<header class="appbar">'+
-        '<div class="brand"><span class="logo">'+icon('claustro')+'</span>'+
-          '<span class="txt"><b>'+esc(estado.nombreCentro||estado.nombreApp)+'</b>'+
-          '<small>'+esc(estado.nombreCentro?estado.nombreApp:'Sin centro configurado')+'</small></span></div>'+
-        '<div class="appbar-right">'+
-          '<span class="badge '+(estado.esAdmin?'admin':'prof')+'">'+icon(estado.esAdmin?'config':'yo')+
-            (estado.esAdmin?'Administrador':'Profesorado')+'</span>'+
-          '<span class="avatar" title="'+esc(estado.email||'')+'">'+esc(inicial)+'</span>'+
-        '</div>'+
-      '</header>'+
-      '<nav class="tabbar">'+nav+'</nav>'+
+      '<div class="topfixed">'+
+        '<header class="appbar">'+
+          '<div class="brand"><span class="logo">'+icon('claustro')+'</span>'+
+            '<span class="txt"><b>'+esc(estado.nombreCentro||estado.nombreApp)+'</b>'+
+            '<small>'+esc(estado.nombreCentro?estado.nombreApp:'Sin centro configurado')+'</small></span></div>'+
+          '<div class="appbar-right">'+
+            '<div class="hdr-sync">'+
+              '<button class="btn sm primary" id="hSync">'+icon('sync')+'Sincronizar</button>'+
+              '<button class="btn sm'+(estado.diariaActiva?' danger':'')+'" id="hDiaria" title="Sincronización automática cada día">'+
+                icon('power')+(estado.diariaActiva?'Diaria: activada':'Diaria: desactivada')+'</button>'+
+            '</div>'+
+            '<span class="sep"></span>'+
+            '<span class="badge '+(estado.esAdmin?'admin':'prof')+'">'+icon(estado.esAdmin?'config':'yo')+
+              (estado.esAdmin?'Administrador':'Profesorado')+'</span>'+
+            '<span class="avatar" title="'+esc(estado.email||'')+'">'+esc(inicial)+'</span>'+
+          '</div>'+
+        '</header>'+
+        '<nav class="tabbar">'+nav+'</nav>'+
+        '<div class="syncarea" id="syncArea" hidden><span class="status" id="syncStatus"></span></div>'+
+      '</div>'+
       '<div class="page">'+
         '<div class="pagehead"><h1 id="tb-tit"></h1><div class="sub" id="tb-sub"></div></div>'+
         '<div class="content" id="content"></div>'+
@@ -173,6 +184,23 @@ function construirShell(estado, preferida){
   Array.prototype.forEach.call(document.querySelectorAll('.tabbar button'), function(b){
     b.onclick = function(){ irATab(b.getAttribute('data-tab')); };
   });
+
+  // Sincronización manual desde la cabecera (centro + propios).
+  document.getElementById('hSync').onclick = function(){
+    var area=document.getElementById('syncArea'); area.hidden=false;
+    lanzarSincronizacion(this, document.getElementById('syncStatus'),
+      {incluirCentro:true, incluirPropios:true},
+      function(){ setTimeout(function(){ area.hidden=true; }, 3000); });
+  };
+  // Conmutar sincronización diaria desde la cabecera.
+  document.getElementById('hDiaria').onclick = function(){
+    var activar = !estado.diariaActiva; this.disabled=true;
+    var run=google.script.run
+      .withSuccessHandler(function(){ recargarApp(TAB_ACTIVA); })
+      .withFailureHandler(function(e){ alert(mensajeError(e)); });
+    if(activar) run.activarSincronizacionDiaria({incluirCentro:true, incluirPropios:true});
+    else run.desactivarSincronizacionDiaria();
+  };
 
   // Pestaña inicial: la preferida (si existe), o Configuración si falta, o la 1ª.
   var primera = (preferida && window.TABS[preferida] && (!window.TABS[preferida].adminOnly || estado.esAdmin))

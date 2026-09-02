@@ -30,10 +30,12 @@ const DEFAULTS = {
     'Lengua Castellana', 'Geografía e Historia', 'Biología y Geología',
     'Física y Química', 'Tecnología', 'Dibujo', 'Filosofía', 'Orientación'
   ],
-  etiquetas: [
-    'Claustro', 'Equipo Directivo', 'PAS', 'Tutores',
-    'Dirección', 'Jefatura de Estudios', 'Secretaría', 'Coordinación'
-  ]
+  etiquetas: {
+    grupo: ['# Claustro 24.25', 'PAS'],
+    departamentos: ['Ciencias', 'Letras', 'Idiomas', 'Artística'],
+    cargos: ['Dirección', 'Jefatura de Estudios', 'Secretaría', 'Coordinación'],
+    otros: []
+  }
 };
 
 /** Correo del usuario que está usando la app en este momento. */
