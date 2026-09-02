@@ -1,30 +1,40 @@
 <script>
-/** Pestaña CONTACTOS DEL CENTRO (solo admin). */
+/** Pestaña CONTACTOS DEL CENTRO (solo admin). Rejilla con columnas de etiqueta
+ *  dinámicas y asignación de etiquetas en bloque. */
 window.TABS = window.TABS || {};
 window.TABS.contactosCentro = {
-  orden: 3, label: 'Contactos del centro', icono: 'claustro', adminOnly: true,
+  orden: 3, label: 'Contactos del centro', icono: 'claustro',
   titulo: 'Contactos del centro', sub: 'El claustro que sincroniza todo el profesorado',
   render: function (cont, estado) {
+    var NUM_MIN = 3;         // columnas de etiqueta mínimas
+    var numCols = NUM_MIN;   // columnas de etiqueta actuales
+    var conocidasBase = (estado.gruposCentro || []).slice();
+
     cont.innerHTML = [
       '<div class="card">',
         '<h2>'+icon('claustro')+'Claustro'+(estado.nombreCentro?' de '+esc(estado.nombreCentro):'')+'</h2>',
-        '<p class="desc">Estos contactos los sincroniza el profesorado y, si usas la lista, también definen quién puede entrar. '+
-        'Funciona como una hoja de cálculo: <b>puedes copiar celdas de Excel/Séneca y pegarlas</b> directamente sobre la rejilla.</p>',
-        '<div id="grid"><p class="muted">Cargando claustro…</p></div>',
+        '<p class="desc">Funciona como una hoja: cada celda de etiqueta es una etiqueta. Marca filas y aplica una etiqueta a todas de golpe, o usa ⤓ para rellenar una columna entera. Puedes copiar y pegar desde Excel/Séneca.</p>',
+        '<div class="bulkbar">',
+          '<input list="dl-etq" id="etqBulk" placeholder="Etiqueta…" autocomplete="off">',
+          '<button class="btn sm" id="bAplicar">'+icon('add')+'Añadir a seleccionadas</button>',
+          '<button class="btn sm" id="bQuitar">'+icon('borrar')+'Quitar de seleccionadas</button>',
+          '<span class="muted" id="selCount" style="margin-left:auto"></span>',
+        '</div>',
+        '<div id="gridZona"><p class="muted">Cargando claustro…</p></div>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir persona</button>',
+          '<button class="btn sm" id="bMasEtq">'+icon('add')+'Columna de etiqueta</button>',
           '<button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar claustro</button>',
           '<button class="btn danger" id="bVaciar" style="margin-left:auto">'+icon('borrar')+'Vaciar lista</button>',
         '</div>',
         '<p class="status" id="sAdmin"></p>',
+        '<datalist id="dl-etq"></datalist>',
       '</div>',
 
       '<div class="card">',
         '<h2>'+icon('importar')+'Importar desde Séneca</h2>',
-        '<p class="desc">Pega aquí tu listado (una fila por persona, columnas separadas por tabulador). '+
-        'Detecta solo el correo, el nombre («Apellidos, Nombre») y el puesto, tanto si hay teléfono como si no. '+
-        'Se añaden a la rejilla; luego pulsa «Guardar claustro».</p>',
-        '<textarea id="pegado" rows="4" placeholder="Pérez García, Ana⇥ana@g.educaand.es⇥600...⇥Música⇥Claustro" style="font-family:var(--mono);font-size:12.5px"></textarea>',
+        '<p class="desc">Pega tu listado (columnas separadas por tabulador). Detecta el correo, el nombre («Apellidos, Nombre») y el puesto. Se añade a la rejilla; luego pulsa «Guardar claustro».</p>',
+        '<textarea id="pegado" rows="4" style="font-family:var(--mono);font-size:12.5px"></textarea>',
         '<div class="row" style="margin-top:12px"><button class="btn" id="bImport">'+icon('importar')+'Añadir a la tabla</button></div>',
         '<p class="status" id="sImport"></p>',
       '</div>',
@@ -37,21 +47,30 @@ window.TABS.contactosCentro = {
       '</div>'
     ].join('');
 
-    var tb = null;
+    var zona = cont.querySelector('#gridZona');
+    var etqBulk = cont.querySelector('#etqBulk');
+
+    // ---- carga inicial ----
     google.script.run
       .withSuccessHandler(function (lista) {
-        pintarGrid(cont, lista);
-        tb = cont.querySelector('#grid tbody');
-        habilitarPegado(tb, filaClaustro);
+        var filas = (lista || []).map(normaliza);
+        if (!filas.length) filas = [filaVacia()];
+        numCols = Math.max(NUM_MIN, maxLen(filas));
+        pintar(filas, new Set());
       })
-      .withFailureHandler(function (e) { cont.querySelector('#grid').innerHTML = '<p class="status err">'+esc(mensajeError(e))+'</p>'; })
+      .withFailureHandler(function (e) { zona.innerHTML = '<p class="status err">'+esc(mensajeError(e))+'</p>'; })
       .adminLeerContactos();
 
-    cont.querySelector('#bAdd').onclick = function(){ if(tb) filaClaustro(tb, {}); };
+    // ---- acciones que persisten (fuera de la rejilla) ----
+    cont.querySelector('#bAdd').onclick = function(){ var d=leerDOM(); d.filas.push(filaVacia()); pintar(d.filas, d.sel); };
+    cont.querySelector('#bMasEtq').onclick = function(){ var d=leerDOM(); numCols++; pintar(d.filas, d.sel); };
+    cont.querySelector('#bAplicar').onclick = function(){ aplicar(true); };
+    cont.querySelector('#bQuitar').onclick = function(){ aplicar(false); };
 
     cont.querySelector('#bGuardar').onclick = function(){
+      var filas = leerDOM().filas.map(paraGuardar).filter(function(f){ return f.email || f.nombre; });
       correr(this, cont.querySelector('#sAdmin'), 'Guardando…',
-        function(r){ r.adminGuardarContactos(leerClaustro(tb)); },
+        function(r){ r.adminGuardarContactos(filas); },
         function(n, st){ setStatus(st, 'Guardado: '+n+' personas en el claustro.', 'ok'); });
     };
 
@@ -59,12 +78,7 @@ window.TABS.contactosCentro = {
       if(!confirm('¿Vaciar TODA la lista del claustro?\n\nSolo borra la lista del centro; no elimina contactos de la cuenta de Google de nadie.')) return;
       correr(this, cont.querySelector('#sAdmin'), 'Vaciando…',
         function(r){ r.adminGuardarContactos([]); },
-        function(n, st){
-          pintarGrid(cont, []);
-          tb = cont.querySelector('#grid tbody');
-          habilitarPegado(tb, filaClaustro);
-          setStatus(st, 'Lista del claustro vaciada.', 'ok');
-        });
+        function(n, st){ numCols=NUM_MIN; pintar([filaVacia()], new Set()); setStatus(st, 'Lista del claustro vaciada.', 'ok'); });
     };
 
     cont.querySelector('#bImport').onclick = function(){
@@ -73,44 +87,138 @@ window.TABS.contactosCentro = {
       correr(this, st, 'Procesando…',
         function(r){ r.adminImportarPegado(texto); },
         function(lista, st){
-          lista.forEach(function(c){ filaClaustro(tb, c); });
+          var d = leerDOM();
+          // Si solo hay una fila vacía, la sustituimos.
+          if(d.filas.length===1 && !d.filas[0].email && !d.filas[0].nombre) d.filas = [];
+          (lista||[]).forEach(function(c){ d.filas.push(normaliza(c)); });
+          numCols = Math.max(numCols, maxLen(d.filas));
+          pintar(d.filas, d.sel);
           cont.querySelector('#pegado').value='';
-          setStatus(st, 'Añadidas '+lista.length+' filas. Revisa y pulsa «Guardar claustro».', 'ok');
+          setStatus(st, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar claustro».', 'ok');
         });
     };
 
     cont.querySelector('#bSyncMia').onclick = function(){
       lanzarSincronizacion(this, cont.querySelector('#sMia'), {incluirCentro:true, incluirPropios:false});
     };
+
+    /* ================= helpers de estado ================= */
+    function normaliza(c){
+      return { nombre:c.nombre||'', apellidos:c.apellidos||'', email:c.email||'',
+        telefono:c.telefono||'', puesto:c.puesto||'', tipoEmail:'Trabajo', grupos:(c.grupos||[]).slice() };
+    }
+    function filaVacia(){ return { nombre:'', apellidos:'', email:'', telefono:'', puesto:'', tipoEmail:'Trabajo', grupos:[] }; }
+    function maxLen(filas){ return filas.reduce(function(m,f){ return Math.max(m, (f.grupos||[]).length); }, 0); }
+    function paraGuardar(f){ var g=(f.grupos||[]).map(function(x){return String(x).trim();}).filter(Boolean); return {nombre:f.nombre,apellidos:f.apellidos,email:f.email,telefono:f.telefono,puesto:f.puesto,tipoEmail:'Trabajo',grupos:g}; }
+
+    /** Lee la rejilla del DOM a un modelo (grupos posicional de numCols huecos). */
+    function leerDOM(){
+      var filas=[], sel=new Set();
+      Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr, idx){
+        var o={tipoEmail:'Trabajo', grupos:[]};
+        Array.prototype.forEach.call(tr.querySelectorAll('input[data-k]'), function(i){ o[i.getAttribute('data-k')]=i.value.trim(); });
+        Array.prototype.forEach.call(tr.querySelectorAll('input[data-tag]'), function(i){ o.grupos.push(i.value.trim()); });
+        filas.push(o);
+        var chk=tr.querySelector('.sel'); if(chk && chk.checked) sel.add(idx);
+      });
+      return {filas:filas, sel:sel};
+    }
+
+    function aplicar(add){
+      var tag = etqBulk.value.trim();
+      var st = cont.querySelector('#sAdmin');
+      if(!tag){ setStatus(st, 'Escribe una etiqueta arriba.', 'err'); return; }
+      var d = leerDOM();
+      if(!d.sel.size){ setStatus(st, 'Marca antes alguna fila.', 'err'); return; }
+      d.sel.forEach(function(i){
+        var g=d.filas[i].grupos, low=tag.toLowerCase();
+        if(add){
+          if(g.map(function(x){return x.toLowerCase();}).indexOf(low)===-1){
+            var hueco=g.indexOf(''); if(hueco>=0) g[hueco]=tag; else g.push(tag);
+          }
+        } else {
+          for(var k=0;k<g.length;k++){ if(g[k].toLowerCase()===low) g[k]=''; }
+        }
+      });
+      numCols = Math.max(numCols, maxLen(d.filas));
+      pintar(d.filas, d.sel);
+      setStatus(st, (add?'Etiqueta añadida a ':'Etiqueta quitada de ')+d.sel.size+' filas.', 'ok');
+    }
+
+    function rellenarColumna(j){
+      var d = leerDOM();
+      var v = d.filas.length ? (d.filas[0].grupos[j]||'') : '';
+      if(!v){ setStatus(cont.querySelector('#sAdmin'), 'Pon un valor en la 1ª fila de esa columna para rellenar hacia abajo.', 'err'); return; }
+      d.filas.forEach(function(f){ f.grupos[j]=v; });
+      pintar(d.filas, d.sel);
+    }
+
+    /* ================= pintado de la rejilla ================= */
+    function pintar(filas, selSet){
+      // datalist con etiquetas conocidas
+      var set={}; conocidasBase.forEach(function(t){ if(t) set[t]=true; });
+      filas.forEach(function(f){ (f.grupos||[]).forEach(function(t){ if(t) set[t]=true; }); });
+      cont.querySelector('#dl-etq').innerHTML = Object.keys(set).sort().map(function(t){ return '<option value="'+esc(t)+'">'; }).join('');
+
+      var thsEtq=''; for(var j=0;j<numCols;j++){
+        thsEtq += '<th>Etiqueta '+(j+1)+' <button class="fillbtn" data-fill="'+j+'" title="Rellenar toda la columna con el valor de la 1ª fila">'+icon('chevron','rot90')+'</button></th>';
+      }
+      var html = '<div class="tablewrap"><table class="rejilla claustro"><thead><tr>'+
+        '<th class="sel-col"><input type="checkbox" class="selall" title="Marcar todas"></th>'+
+        '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th>'+thsEtq+'<th></th>'+
+        '</tr></thead><tbody>';
+      filas.forEach(function(f, idx){
+        var tags=''; for(var j=0;j<numCols;j++){ tags += '<td><input data-tag="'+j+'" list="dl-etq" autocomplete="off" value="'+esc(f.grupos[j]||'')+'"></td>'; }
+        html += '<tr'+(selSet && selSet.has(idx)?' class="marcada"':'')+'>'+
+          '<td class="sel-col"><input type="checkbox" class="sel"'+(selSet && selSet.has(idx)?' checked':'')+'></td>'+
+          '<td><input data-k="nombre" value="'+esc(f.nombre)+'"></td>'+
+          '<td><input data-k="apellidos" value="'+esc(f.apellidos)+'"></td>'+
+          '<td><input data-k="email" value="'+esc(f.email)+'"></td>'+
+          '<td><input data-k="telefono" value="'+esc(f.telefono)+'"></td>'+
+          '<td><input data-k="puesto" value="'+esc(f.puesto)+'"></td>'+
+          tags+
+          '<td class="act"><button class="btn danger sm icononly borrar" title="Quitar fila">'+icon('borrar')+'</button></td>'+
+        '</tr>';
+      });
+      html += '</tbody></table></div>';
+      zona.innerHTML = html;
+
+      // wiring
+      var selall = zona.querySelector('.selall');
+      selall.onchange = function(){ Array.prototype.forEach.call(zona.querySelectorAll('.sel'), function(c){ c.checked=selall.checked; c.closest('tr').classList.toggle('marcada', selall.checked); }); actualizarCount(); };
+      Array.prototype.forEach.call(zona.querySelectorAll('.sel'), function(c){ c.onchange=function(){ c.closest('tr').classList.toggle('marcada', c.checked); actualizarCount(); }; });
+      Array.prototype.forEach.call(zona.querySelectorAll('.borrar'), function(b){ b.onclick=function(){ b.closest('tr').remove(); actualizarCount(); }; });
+      Array.prototype.forEach.call(zona.querySelectorAll('.fillbtn'), function(b){ b.onclick=function(){ rellenarColumna(parseInt(b.getAttribute('data-fill'),10)); }; });
+      habilitarPegadoPos(zona.querySelector('tbody'));
+      actualizarCount();
+    }
+
+    function actualizarCount(){
+      var n = zona.querySelectorAll('.sel:checked').length;
+      cont.querySelector('#selCount').textContent = n ? (n+' seleccionada'+(n>1?'s':'')) : '';
+    }
   }
 };
 
-function pintarGrid(cont, lista){
-  cont.querySelector('#grid').innerHTML =
-    '<div class="tablewrap"><table class="rejilla"><thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas (coma)</th><th></th></tr></thead><tbody></tbody></table></div>';
-  var tb = cont.querySelector('#grid tbody');
-  (lista||[]).forEach(function(c){ filaClaustro(tb, c); });
-  if(!tb.children.length) filaClaustro(tb, {});
-}
-function filaClaustro(tb, c){
-  var tr=document.createElement('tr'), ks=['nombre','apellidos','email','telefono','puesto','grupos'];
-  tr.innerHTML = ks.map(function(k){
-    var v = k==='grupos'?(c.grupos||[]).join(', '):(c[k]||'');
-    return '<td><input data-k="'+k+'" value="'+esc(v)+'"></td>';
-  }).join('')+'<td class="act"><button class="btn danger sm icononly" title="Quitar fila">'+icon('borrar')+'</button></td>';
-  tr.querySelector('button').onclick=function(){ tr.remove(); };
-  tb.appendChild(tr);
-}
-function leerClaustro(tb){
-  if(!tb) return [];
-  return Array.prototype.map.call(tb.querySelectorAll('tr'), function(tr){
-    var o={tipoEmail:'Trabajo'};
-    Array.prototype.forEach.call(tr.querySelectorAll('input'), function(i){
-      var k=i.getAttribute('data-k');
-      if(k==='grupos') o.grupos=i.value.split(',').map(function(s){return s.trim();}).filter(Boolean);
-      else o[k]=i.value.trim();
+/** Pegado posicional: reparte texto (tab=columnas, saltos=filas) desde la celda
+ *  donde se pega, respetando el orden visual de inputs de datos (sin la casilla). */
+function habilitarPegadoPos(tbody){
+  tbody.addEventListener('paste', function(e){
+    var inp=e.target; if(!inp || inp.tagName!=='INPUT' || inp.classList.contains('sel')) return;
+    var texto=(e.clipboardData||window.clipboardData).getData('text');
+    if(!texto || (texto.indexOf('\t')===-1 && texto.indexOf('\n')===-1)) return;
+    e.preventDefault();
+    var trs=Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+    var tr=inp.closest('tr'), startRow=trs.indexOf(tr);
+    var inputsFila=function(t){ return Array.prototype.slice.call(t.querySelectorAll('input:not(.sel)')); };
+    var startCol=inputsFila(tr).indexOf(inp);
+    var lineas=texto.replace(/\r/g,'').split('\n'); if(lineas.length && lineas[lineas.length-1]==='') lineas.pop();
+    lineas.forEach(function(linea, r){
+      var fila=tbody.querySelectorAll('tr')[startRow+r];
+      if(!fila) return;
+      var ins=inputsFila(fila);
+      linea.split('\t').forEach(function(val, c){ var t=ins[startCol+c]; if(t) t.value=val.trim(); });
     });
-    return o;
-  }).filter(function(o){ return o.email||o.nombre; });
+  });
 }
 </script>

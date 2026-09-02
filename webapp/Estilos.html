@@ -170,6 +170,18 @@
   table.rejilla td.act{width:44px; text-align:center}
   table.rejilla td.act .btn{box-shadow:none; border-color:transparent}
   table.rejilla tbody tr:hover{background:transparent}
+  /* selección y etiquetas en bloque */
+  .bulkbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px;
+    padding:10px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r)}
+  .bulkbar input{max-width:230px}
+  table.rejilla th.sel-col, table.rejilla td.sel-col{width:38px; text-align:center; padding:0}
+  table.rejilla .sel, table.rejilla .selall{width:17px; height:17px; accent-color:var(--primary); cursor:pointer; margin:0}
+  table.rejilla tbody tr.marcada{background:var(--primary-soft)}
+  .fillbtn{background:none; border:none; cursor:pointer; color:var(--ink-faint); padding:2px; border-radius:5px;
+    display:inline-flex; vertical-align:middle}
+  .fillbtn:hover{color:var(--primary); background:var(--surface)}
+  .fillbtn .ico{width:15px; height:15px}
+  .ico.rot90{transform:rotate(90deg)}
 
   /* ---------- Feedback ---------- */
   .status{font-size:13.5px; color:var(--ink-soft); min-height:20px; margin:12px 0 0; display:flex; align-items:center; gap:7px}
