@@ -105,24 +105,25 @@ function construirShell(estado, preferida){
   }).join('');
 
   document.getElementById('root').innerHTML =
-    '<div class="shell">'+
-      '<aside class="side">'+
+    '<div class="appwrap">'+
+      '<header class="appbar">'+
         '<div class="brand"><span class="logo">'+icon('claustro')+'</span>'+
-          '<span><b>'+esc(estado.nombreApp)+'</b><small>'+esc(estado.nombreCentro||'Sin centro configurado')+'</small></span></div>'+
-        '<nav class="nav"><span class="lbl">Secciones</span>'+nav+'</nav>'+
-        '<div class="me"><span class="av">'+esc(inicial)+'</span>'+
-          '<span class="who"><b>'+(estado.esAdmin?'Administrador':'Profesorado')+'</b>'+
-          '<span>'+esc(estado.email||'')+'</span></span></div>'+
-      '</aside>'+
-      '<main>'+
-        '<header class="topbar"><div class="tt"><h1 id="tb-tit"></h1><div class="sub" id="tb-sub"></div></div>'+
+          '<span class="txt"><b>'+esc(estado.nombreCentro||estado.nombreApp)+'</b>'+
+          '<small>'+esc(estado.nombreCentro?estado.nombreApp:'Sin centro configurado')+'</small></span></div>'+
+        '<div class="appbar-right">'+
           '<span class="badge '+(estado.esAdmin?'admin':'prof')+'">'+icon(estado.esAdmin?'config':'yo')+
-          (estado.esAdmin?'Administrador':'Profesorado')+'</span></header>'+
+            (estado.esAdmin?'Administrador':'Profesorado')+'</span>'+
+          '<span class="avatar" title="'+esc(estado.email||'')+'">'+esc(inicial)+'</span>'+
+        '</div>'+
+      '</header>'+
+      '<nav class="tabbar">'+nav+'</nav>'+
+      '<div class="page">'+
+        '<div class="pagehead"><h1 id="tb-tit"></h1><div class="sub" id="tb-sub"></div></div>'+
         '<div class="content" id="content"></div>'+
-      '</main>'+
+      '</div>'+
     '</div>';
 
-  Array.prototype.forEach.call(document.querySelectorAll('.nav button'), function(b){
+  Array.prototype.forEach.call(document.querySelectorAll('.tabbar button'), function(b){
     b.onclick = function(){ irATab(b.getAttribute('data-tab')); };
   });
 
@@ -135,7 +136,7 @@ function construirShell(estado, preferida){
 function irATab(key){
   TAB_ACTIVA = key;
   var t = window.TABS[key];
-  Array.prototype.forEach.call(document.querySelectorAll('.nav button'), function(b){
+  Array.prototype.forEach.call(document.querySelectorAll('.tabbar button'), function(b){
     b.classList.toggle('active', b.getAttribute('data-tab')===key);
   });
   document.getElementById('tb-tit').textContent = t.titulo || t.label;

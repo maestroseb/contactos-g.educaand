@@ -20,7 +20,9 @@ window.TABS.contactosCentro = {
 
       '<div class="card">',
         '<h2>'+icon('importar')+'Importar desde Séneca</h2>',
-        '<p class="desc">Pega filas (Apellidos, Nombre ⇥ Correo ⇥ Teléfono ⇥ Especialidad ⇥ Etiquetas). Se añaden a la tabla; luego pulsa «Guardar claustro».</p>',
+        '<p class="desc">Pega aquí tu listado (una fila por persona, columnas separadas por tabulador). '+
+        'Detecta solo el correo, el nombre («Apellidos, Nombre») y el puesto, tanto si hay teléfono como si no. '+
+        'Se añaden a la rejilla; luego pulsa «Guardar claustro».</p>',
         '<textarea id="pegado" rows="4" placeholder="Pérez García, Ana⇥ana@g.educaand.es⇥600...⇥Música⇥Claustro" style="font-family:var(--mono);font-size:12.5px"></textarea>',
         '<div class="row" style="margin-top:12px"><button class="btn" id="bImport">'+icon('importar')+'Añadir a la tabla</button></div>',
         '<p class="status" id="sImport"></p>',

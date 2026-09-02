@@ -19,31 +19,50 @@ function gruposDelCentro_() {
 
 /**
  * Convierte texto pegado (p. ej. exportado de Séneca) en contactos.
- * Columnas por tabulador: "Apellidos, Nombre" | Correo | Teléfono |
- * Especialidad/DPTO | Etiqueta 1 | Etiqueta 2 | Etiqueta 3 | Etiqueta 4.
+ *
+ * Es flexible con el formato: separa columnas por TABULADOR y detecta
+ * automáticamente cuál es el correo (la que contiene "@"). La 1ª columna es el
+ * nombre ("Apellidos, Nombre"), y del resto de columnas: la que parece número
+ * es el teléfono, la primera de texto es el puesto/especialidad y las demás,
+ * etiquetas. Así admite tanto "Nombre · Correo · Puesto" como
+ * "Nombre · Correo · Teléfono · Puesto · Etiquetas…".
  */
 function parsearClaustroPegado_(texto) {
   const filas = String(texto || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const out = [];
+  const pareceTelefono = c => /^[+(]?\d[\d\s().-]{5,}$/.test(c);
+
   filas.forEach(linea => {
-    const c = linea.split('\t').map(s => s.trim());
-    const nombreCompleto = c[0] || '';
+    const cols = linea.split('\t').map(s => s.trim());
+
+    // Columna del correo (la que tenga @).
+    let emailIdx = -1;
+    for (let i = 0; i < cols.length; i++) { if (cols[i].indexOf('@') !== -1) { emailIdx = i; break; } }
+    const email = emailIdx >= 0 ? cols[emailIdx].toLowerCase() : '';
+
+    // Nombre = 1ª columna (salvo que sea el propio correo).
+    let nombreCompleto = (emailIdx === 0) ? '' : (cols[0] || '');
     let apellidos = '', nombre = nombreCompleto;
     if (nombreCompleto.indexOf(',') !== -1) {
       const p = nombreCompleto.split(',');
       apellidos = p[0].trim();
       nombre = p.slice(1).join(',').trim();
     }
-    const email = c[1] ? c[1].trim().toLowerCase() : '';
+
+    // Resto de columnas: teléfono / puesto / etiquetas.
+    let telefono = '', puesto = '';
+    const etiquetas = [];
+    for (let j = 0; j < cols.length; j++) {
+      if (j === 0 || j === emailIdx || !cols[j]) continue;
+      if (!telefono && pareceTelefono(cols[j])) telefono = cols[j];
+      else if (!puesto) puesto = cols[j];
+      else etiquetas.push(cols[j]);
+    }
+
     if (!email && !nombre) return;
     out.push({
-      nombre: nombre,
-      apellidos: apellidos,
-      tipoEmail: 'Trabajo',
-      email: email,
-      telefono: c[2] || '',
-      puesto: c[3] || '',
-      grupos: [c[4], c[5], c[6], c[7]].map(g => (g ? g.trim() : '')).filter(String)
+      nombre: nombre, apellidos: apellidos, tipoEmail: 'Trabajo',
+      email: email, telefono: telefono, puesto: puesto, grupos: etiquetas
     });
   });
   return out;

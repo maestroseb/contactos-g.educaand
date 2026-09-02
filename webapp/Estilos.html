@@ -3,14 +3,14 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root{
-    --bg:#f4f5f8; --surface:#ffffff; --surface-2:#eef1f5; --surface-3:#e7ebf0;
-    --ink:#16181d; --ink-soft:#51555f; --ink-faint:#878c96;
-    --border:#e3e7ee; --border-strong:#cfd5de;
-    --primary:#0f766e; --primary-strong:#0b5c55; --primary-ink:#0b5c55; --primary-soft:#0f766e14;
+    --bg:#f7f8fb; --surface:#ffffff; --surface-2:#f4f5f8; --surface-3:#ecedf3;
+    --ink:#1a1b25; --ink-soft:#565a67; --ink-faint:#8a8f9c;
+    --border:#e9eaf1; --border-strong:#dcdee8;
+    --primary:#6558f5; --primary-strong:#5346e0; --primary-ink:#4a3fd0; --primary-soft:#6558f510;
     --on-primary:#ffffff;
     --good:#2f7d52; --good-soft:#2f7d5216; --warn:#b45309; --warn-soft:#b4530916;
     --danger:#b42318; --danger-soft:#b4231814;
-    --ring:0 0 0 3px rgba(15,118,110,.28);
+    --ring:0 0 0 3px rgba(101,88,245,.26);
     --sh-sm:0 1px 2px rgba(16,24,40,.06);
     --sh-md:0 1px 2px rgba(16,24,40,.05), 0 8px 22px rgba(16,24,40,.07);
     --sh-lg:0 6px 16px rgba(16,24,40,.08), 0 24px 48px rgba(16,24,40,.10);
@@ -24,11 +24,11 @@
       --bg:#0e1014; --surface:#171a20; --surface-2:#1d222a; --surface-3:#242a34;
       --ink:#e9eaee; --ink-soft:#a9afba; --ink-faint:#7b818c;
       --border:#262c36; --border-strong:#353c48;
-      --primary:#35c9b9; --primary-strong:#5fd6c8; --primary-ink:#7fddd0; --primary-soft:#35c9b914;
-      --on-primary:#08211e;
+      --primary:#a29bfe; --primary-strong:#b6afff; --primary-ink:#c3bdff; --primary-soft:#a29bfe14;
+      --on-primary:#191436;
       --good:#5cc98a; --good-soft:#5cc98a16; --warn:#e0a44a; --warn-soft:#e0a44a16;
       --danger:#f0897f; --danger-soft:#f0897f16;
-      --ring:0 0 0 3px rgba(53,201,185,.30);
+      --ring:0 0 0 3px rgba(162,155,254,.34);
       --sh-sm:0 1px 2px rgba(0,0,0,.3);
       --sh-md:0 1px 2px rgba(0,0,0,.35), 0 8px 22px rgba(0,0,0,.4);
       --sh-lg:0 6px 16px rgba(0,0,0,.45), 0 24px 48px rgba(0,0,0,.55);
@@ -38,11 +38,11 @@
     --bg:#0e1014; --surface:#171a20; --surface-2:#1d222a; --surface-3:#242a34;
     --ink:#e9eaee; --ink-soft:#a9afba; --ink-faint:#7b818c;
     --border:#262c36; --border-strong:#353c48;
-    --primary:#35c9b9; --primary-strong:#5fd6c8; --primary-ink:#7fddd0; --primary-soft:#35c9b914;
-    --on-primary:#08211e;
+    --primary:#a29bfe; --primary-strong:#b6afff; --primary-ink:#c3bdff; --primary-soft:#a29bfe14;
+    --on-primary:#191436;
     --good:#5cc98a; --good-soft:#5cc98a16; --warn:#e0a44a; --warn-soft:#e0a44a16;
     --danger:#f0897f; --danger-soft:#f0897f16;
-    --ring:0 0 0 3px rgba(53,201,185,.30);
+    --ring:0 0 0 3px rgba(162,155,254,.34);
     --sh-sm:0 1px 2px rgba(0,0,0,.3);
     --sh-md:0 1px 2px rgba(0,0,0,.35), 0 8px 22px rgba(0,0,0,.4);
     --sh-lg:0 6px 16px rgba(0,0,0,.45), 0 24px 48px rgba(0,0,0,.55);
@@ -56,46 +56,48 @@
   .ico{width:20px; height:20px; flex:none; display:inline-block; vertical-align:middle}
   .mono{font-family:var(--mono)}
 
-  /* ---------- App shell ---------- */
-  .shell{display:grid; grid-template-columns:250px 1fr; min-height:100vh}
-  .side{background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column;
-    padding:20px 14px; gap:6px; position:sticky; top:0; height:100vh}
-  .brand{display:flex; align-items:center; gap:11px; padding:6px 8px 16px}
-  .brand .logo{width:38px; height:38px; border-radius:11px; display:grid; place-items:center;
-    background:linear-gradient(150deg,var(--primary),var(--primary-strong)); color:var(--on-primary); box-shadow:var(--sh-sm)}
-  .brand .logo .ico{width:22px;height:22px}
-  .brand b{font-family:var(--head); font-size:15.5px; font-weight:700; letter-spacing:-.02em; line-height:1.1}
-  .brand small{display:block; color:var(--ink-faint); font-size:11.5px; font-weight:500}
-  .nav{display:flex; flex-direction:column; gap:3px; margin-top:4px}
-  .nav .lbl{font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--ink-faint);
-    font-weight:600; padding:10px 10px 5px}
-  .nav button{display:flex; align-items:center; gap:11px; width:100%; text-align:left; cursor:pointer;
-    background:transparent; border:none; color:var(--ink-soft); font-family:var(--sans); font-size:14px; font-weight:500;
-    padding:9px 11px; border-radius:var(--r-sm); transition:background .15s, color .15s}
-  .nav button .ico{color:var(--ink-faint); transition:color .15s}
-  .nav button:hover{background:var(--surface-2); color:var(--ink)}
-  .nav button:hover .ico{color:var(--ink-soft)}
-  .nav button.active{background:var(--primary-soft); color:var(--primary-ink); font-weight:600}
-  .nav button.active .ico{color:var(--primary)}
-  .nav button:focus-visible{outline:none; box-shadow:var(--ring)}
-  .nav .dot{margin-left:auto; width:7px; height:7px; border-radius:50%; background:var(--warn)}
-  .side .me{margin-top:auto; border-top:1px solid var(--border); padding-top:14px; display:flex; gap:10px; align-items:center}
-  .side .me .av{width:34px; height:34px; border-radius:50%; background:var(--surface-3); color:var(--ink-soft);
-    display:grid; place-items:center; font-weight:600; font-size:14px; flex:none}
-  .side .me .who{min-width:0}
-  .side .me .who b{display:block; font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .side .me .who span{font-size:11px; color:var(--ink-faint)}
-
-  main{min-width:0; display:flex; flex-direction:column}
-  .topbar{display:flex; align-items:center; gap:14px; padding:22px 34px 8px}
-  .topbar .tt{min-width:0}
-  .topbar h1{font-size:24px; font-weight:800}
-  .topbar .sub{color:var(--ink-faint); font-size:13.5px; margin-top:2px}
-  .badge{margin-left:auto; font-size:11.5px; font-weight:600; letter-spacing:.02em; padding:5px 12px;
+  /* ---------- App shell (barra superior) ---------- */
+  .appwrap{min-height:100vh; display:flex; flex-direction:column}
+  .appbar{display:flex; align-items:center; gap:14px; background:var(--surface);
+    padding:13px 30px; border-bottom:1px solid var(--border)}
+  .brand{display:flex; align-items:center; gap:12px; min-width:0}
+  .brand .logo{width:36px; height:36px; border-radius:10px; display:grid; place-items:center; flex:none;
+    background:linear-gradient(150deg,var(--primary),var(--primary-strong)); color:#fff; box-shadow:var(--sh-sm)}
+  .brand .logo .ico{width:20px;height:20px}
+  .brand .txt{min-width:0}
+  .brand b{display:block; font-family:var(--head); font-size:15px; font-weight:700; letter-spacing:-.02em; line-height:1.15;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .brand small{display:block; color:var(--ink-faint); font-size:12px; font-weight:500}
+  .appbar-right{margin-left:auto; display:flex; align-items:center; gap:16px}
+  .badge{font-size:11.5px; font-weight:600; letter-spacing:.02em; padding:5px 12px;
     border-radius:var(--r-pill); display:inline-flex; gap:6px; align-items:center; white-space:nowrap}
   .badge.admin{background:var(--primary-soft); color:var(--primary-ink)}
   .badge.prof{background:var(--surface-2); color:var(--ink-soft)}
-  .content{padding:16px 34px 60px; display:flex; flex-direction:column; gap:20px; max-width:960px}
+  .badge .ico{width:14px;height:14px}
+  .avatar{width:36px; height:36px; border-radius:50%; flex:none; display:grid; place-items:center;
+    background:linear-gradient(150deg,var(--primary),var(--primary-strong)); color:#fff; font-weight:700; font-size:15px}
+
+  .tabbar{display:flex; gap:2px; background:var(--surface); padding:0 22px; border-bottom:1px solid var(--border);
+    overflow-x:auto}
+  .tabbar button{position:relative; display:inline-flex; align-items:center; gap:9px; cursor:pointer;
+    background:transparent; border:none; color:var(--ink-soft); font-family:var(--sans); font-size:14px; font-weight:500;
+    padding:15px 14px; white-space:nowrap; transition:color .15s}
+  .tabbar button .ico{width:18px;height:18px; color:var(--ink-faint); transition:color .15s}
+  .tabbar button::after{content:""; position:absolute; left:10px; right:10px; bottom:-1px; height:2.5px;
+    border-radius:3px 3px 0 0; background:transparent; transition:background .15s}
+  .tabbar button:hover{color:var(--ink)}
+  .tabbar button:hover .ico{color:var(--ink-soft)}
+  .tabbar button.active{color:var(--primary-ink); font-weight:600}
+  .tabbar button.active .ico{color:var(--primary)}
+  .tabbar button.active::after{background:var(--primary)}
+  .tabbar button:focus-visible{outline:none; box-shadow:var(--ring); border-radius:var(--r-sm)}
+  .tabbar .dot{width:7px; height:7px; border-radius:50%; background:var(--warn)}
+
+  .page{flex:1; width:100%; max-width:1060px; margin:0 auto; padding:30px 32px 64px}
+  .pagehead{margin-bottom:22px}
+  .pagehead h1{font-size:26px; font-weight:800; letter-spacing:-.02em}
+  .pagehead .sub{color:var(--ink-soft); font-size:14.5px; margin-top:5px}
+  .content{display:flex; flex-direction:column; gap:20px}
 
   /* ---------- Cards ---------- */
   .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg);
@@ -194,12 +196,14 @@
   .loading{min-height:100vh; display:grid; place-items:center; color:var(--ink-faint); gap:10px}
 
   /* ---------- Responsive ---------- */
-  @media (max-width:860px){
-    .shell{grid-template-columns:1fr}
-    .side{position:static; height:auto; flex-direction:column; border-right:none; border-bottom:1px solid var(--border)}
-    .side .me{margin-top:14px}
-    .nav{flex-direction:row; flex-wrap:wrap} .nav .lbl{display:none} .nav .dot{margin-left:6px}
-    .topbar{padding:18px 20px 6px} .content{padding:14px 20px 50px}
+  @media (max-width:720px){
+    .appbar{padding:12px 18px}
+    .brand small{display:none}
+    .tabbar{padding:0 10px}
+    .tabbar button{padding:13px 11px; font-size:13.5px}
+    .page{padding:22px 18px 54px}
+    .pagehead h1{font-size:22px}
+    .grid2{grid-template-columns:1fr}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
 </style>
