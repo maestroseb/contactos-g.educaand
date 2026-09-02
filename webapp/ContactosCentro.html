@@ -12,11 +12,12 @@ window.TABS.contactosCentro = {
     var armado = null;     // etiqueta armada
     var seq = 0;
     var cats = estado.etiquetasCats || {};
+    var pintando = false, accionPintar = true, pintadas = {};  // arrastre para pintar
 
     cont.innerHTML = [
       '<div class="card">',
         '<h2>'+icon('claustro')+'Claustro'+(estado.nombreCentro?' de '+esc(estado.nombreCentro):'')+'</h2>',
-        '<p class="desc">Elige una etiqueta abajo y <b>pincha en las personas</b> para asignársela (vuelve a pinchar para quitarla). También puedes marcar filas y aplicarla en bloque.</p>',
+        '<p class="desc">Elige una etiqueta abajo y <b>pincha (o arrastra arriba/abajo) sobre las personas</b> para asignársela; vuelve a pinchar para quitarla. También puedes marcar filas y aplicarla en bloque.</p>',
         '<div class="palette" id="paleta"></div>',
         '<div id="gridZona"><p class="muted">Cargando claustro…</p></div>',
         '<div class="row" style="margin-top:14px">',
@@ -176,16 +177,46 @@ window.TABS.contactosCentro = {
       Array.prototype.forEach.call(zona.querySelectorAll('.chip .x'), function(x){
         x.onclick = function(e){ e.stopPropagation(); var f=fila(x); if(f){ toggleTag(f, x.getAttribute('data-x'), false); renderGrid(); } };
       });
-      // clic en fila para asignar la etiqueta armada
+      // pinchar (y arrastrar) para asignar/quitar la etiqueta armada
       Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
-        tr.addEventListener('click', function(e){
+        tr.addEventListener('pointerdown', function(e){
           if(!armado) return;
           if(e.target.closest('input, button, .x')) return;
-          var f = FILAS.filter(function(x){return x.id===tr.getAttribute('data-id');})[0];
-          if(f){ toggleTag(f, armado, null); renderGrid(); }
+          e.preventDefault();
+          var f = filaId(tr.getAttribute('data-id')); if(!f) return;
+          accionPintar = !tieneTag(f, armado);   // según la 1ª: si no la tiene, pintamos (añadir); si la tiene, borramos
+          pintando = true; pintadas = {};
+          document.body.style.userSelect = 'none';
+          aplicarPintura(tr, f);
         });
       });
     }
+
+    function onPaintMove(e){
+      if(!pintando) return;
+      var el = document.elementFromPoint(e.clientX, e.clientY);
+      var tr = el && el.closest ? el.closest('tr[data-id]') : null;
+      if(tr && zona.contains(tr)){ var f = filaId(tr.getAttribute('data-id')); if(f) aplicarPintura(tr, f); }
+    }
+    function finPintura(){ if(pintando){ pintando=false; document.body.style.userSelect=''; if(document.contains(zona)) renderGrid(); } }
+    document.addEventListener('pointermove', onPaintMove);
+    document.addEventListener('pointerup', finPintura);
+    document.addEventListener('pointercancel', finPintura);
+
+    function aplicarPintura(tr, f){
+      if(pintadas[f.id]) return; pintadas[f.id]=true;
+      toggleTag(f, armado, accionPintar);
+      pintarCelda(tr, f);
+    }
+    function pintarCelda(tr, f){
+      var cell = tr.querySelector('.etq-cell'); if(!cell) return;
+      cell.innerHTML = chipsDe(f);
+      Array.prototype.forEach.call(cell.querySelectorAll('.chip .x'), function(x){
+        x.onclick = function(e){ e.stopPropagation(); toggleTag(f, x.getAttribute('data-x'), false); pintarCelda(tr, f); };
+      });
+    }
+    function tieneTag(f, tag){ return (f.grupos||[]).some(function(x){ return x.toLowerCase()===tag.toLowerCase(); }); }
+    function filaId(id){ return FILAS.filter(function(x){ return x.id===id; })[0]; }
 
     function chipsDe(f){
       var g = (f.grupos||[]).filter(Boolean);
