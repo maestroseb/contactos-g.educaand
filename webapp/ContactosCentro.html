@@ -14,6 +14,7 @@ window.TABS.contactosCentro = {
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir persona</button>',
           '<button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar claustro</button>',
+          '<button class="btn danger" id="bVaciar" style="margin-left:auto">'+icon('borrar')+'Vaciar lista</button>',
         '</div>',
         '<p class="status" id="sAdmin"></p>',
       '</div>',
@@ -52,6 +53,18 @@ window.TABS.contactosCentro = {
       correr(this, cont.querySelector('#sAdmin'), 'Guardando…',
         function(r){ r.adminGuardarContactos(leerClaustro(tb)); },
         function(n, st){ setStatus(st, 'Guardado: '+n+' personas en el claustro.', 'ok'); });
+    };
+
+    cont.querySelector('#bVaciar').onclick = function(){
+      if(!confirm('¿Vaciar TODA la lista del claustro?\n\nSolo borra la lista del centro; no elimina contactos de la cuenta de Google de nadie.')) return;
+      correr(this, cont.querySelector('#sAdmin'), 'Vaciando…',
+        function(r){ r.adminGuardarContactos([]); },
+        function(n, st){
+          pintarGrid(cont, []);
+          tb = cont.querySelector('#grid tbody');
+          habilitarPegado(tb, filaClaustro);
+          setStatus(st, 'Lista del claustro vaciada.', 'ok');
+        });
     };
 
     cont.querySelector('#bImport').onclick = function(){
