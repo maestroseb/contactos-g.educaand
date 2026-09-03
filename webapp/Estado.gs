@@ -56,12 +56,6 @@ function estaConfigurado_() {
   return !!(c && c.completo);
 }
 
-/** Correo del grupo del profesorado configurado (o ''). */
-function correoGrupoProfesorado_() {
-  const c = getConfig_();
-  return (c && c.grupoProfesorado) ? String(c.grupoProfesorado).trim() : '';
-}
-
 /** Nombre del centro configurado (o ''). */
 function nombreCentro_() {
   const c = getConfig_();
