@@ -118,9 +118,8 @@ window.TABS.misContactos = {
         var r = filaDe(tr.getAttribute('data-id')); if(!r) return;
         Array.prototype.forEach.call(tr.querySelectorAll('input[data-k]'), function(inp){
           var k = inp.getAttribute('data-k');
-          inp.oninput = function(){ r[k] = inp.value;
-            if(k==='puesto'){ inp.size = Math.max(3, inp.value.length); inp.style.setProperty('--h', inp.value?hue(inp.value):250); }
-            revisar(); };
+          if(k==='puesto') armarChipInput(inp);
+          inp.oninput = function(){ r[k] = inp.value; revisar(); };
         });
         tr.querySelector('.bdel').onclick = function(){ MIS = MIS.filter(function(x){ return x.id!==r.id; }); pintarFiltro(); pintarTabla(); revisar(); };
         chipCellEditor(tr.querySelector('.etqs'), r.grupos, function(){ pintarFiltro(); revisar(); });
@@ -234,7 +233,8 @@ function filaPropio(tb, c, onChange){
     '<td class="etqs"></td>'+
     '<td class="act"><button class="btn danger sm icononly" title="Quitar fila">'+icon('borrar')+'</button></td>';
   var puestoInp = tr.querySelector('input[data-k="puesto"]');
-  puestoInp.oninput = function(){ puestoInp.size = Math.max(3, puestoInp.value.length); puestoInp.style.setProperty('--h', puestoInp.value?hue(puestoInp.value):250); if(onChange) onChange(); };
+  armarChipInput(puestoInp);
+  puestoInp.addEventListener('input', function(){ if(onChange) onChange(); });
   tr.querySelector('.act button').onclick = function(){ tr.remove(); if(onChange) onChange(); };
   chipCellEditor(tr.querySelector('.etqs'), tr._grupos, onChange);
   tb.appendChild(tr);

@@ -35,6 +35,24 @@ function chipCellEditor(td, grupos, onChange){
   }
   render();
 }
+
+/**
+ * Convierte un input en «chip editable»: vacío o mientras se escribe se ve como
+ * un campo normal; al pulsar Enter o salir, si tiene contenido, se muestra como
+ * pastilla de color. Al volver a enfocarlo se edita como texto normal.
+ */
+function armarChipInput(inp){
+  function tam(){ inp.size = Math.max(3, (inp.value || '').length || 3); }
+  function comoChip(){
+    inp.style.setProperty('--h', inp.value ? hue(inp.value) : 250);
+    inp.classList.toggle('aschip', !!inp.value.trim());
+  }
+  inp.addEventListener('input', tam);
+  inp.addEventListener('focus', function(){ inp.classList.remove('aschip'); });
+  inp.addEventListener('blur', comoChip);
+  inp.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); inp.blur(); } });
+  tam(); comoChip();   // estado inicial (chip solo si ya trae valor)
+}
 function icon(name, cls){
   return '<svg class="ico'+(cls?' '+cls:'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
     'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(window.ICON[name]||'')+'</svg>';

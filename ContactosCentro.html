@@ -248,12 +248,8 @@ window.TABS.contactosCentro = {
       var tabla = zona.querySelector('table');
       // inputs de texto
       Array.prototype.forEach.call(zona.querySelectorAll('input[data-k]'), function(inp){
-        inp.oninput = function(){
-          var f=fila(inp), k=inp.getAttribute('data-k');
-          if(f) f[k] = inp.value;
-          if(k==='puesto'){ inp.size = Math.max(3, inp.value.length); inp.style.setProperty('--h', inp.value?hue(inp.value):250); }
-          revisarClaustro();
-        };
+        if(inp.getAttribute('data-k')==='puesto') armarChipInput(inp);
+        inp.oninput = function(){ var f=fila(inp); if(f) f[inp.getAttribute('data-k')] = inp.value; revisarClaustro(); };
       });
       // selección
       var selall = zona.querySelector('.selall');
