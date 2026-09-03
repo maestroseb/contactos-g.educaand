@@ -51,15 +51,15 @@
 
   *{box-sizing:border-box}
   [hidden]{display:none!important}
-  html,body{height:100%}
-  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+  html{height:100%; background:var(--bg)}   /* fondo continuo: sin «corte» al final */
+  body{min-height:100%; margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
     font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility}
   h1,h2,h3,h4{font-family:var(--head); margin:0; line-height:1.15; letter-spacing:-.01em; font-weight:700}
   .ico{width:20px; height:20px; flex:none; display:inline-block; vertical-align:middle}
   .mono{font-family:var(--mono)}
 
   /* ---------- App shell (barra superior) ---------- */
-  .appwrap{min-height:100vh; display:flex; flex-direction:column}
+  .appwrap{min-height:100vh; min-height:100dvh; display:flex; flex-direction:column}
   .appbar{display:flex; align-items:center; gap:14px; background:var(--surface);
     padding:13px 30px; border-bottom:1px solid var(--border)}
   .brand{display:flex; align-items:center; gap:12px; min-width:0}
@@ -375,8 +375,20 @@
 
   /* ---------- Responsive ---------- */
   @media (max-width:720px){
-    .appbar{padding:12px 18px}
+    .appbar{padding:12px 16px; flex-wrap:wrap; row-gap:12px; column-gap:10px}
     .brand small{display:none}
+    /* Los hijos de .appbar-right pasan a colocarse en la barra directamente. */
+    .appbar-right{display:contents}
+    .appbar .sep{display:none}
+    .brand{order:1; flex:1 1 auto}
+    .appbar .badge{order:2}
+    .appbar .avatar{order:3}
+    /* Botones de sincronización apilados y a lo ancho, debajo. */
+    .hdr-sync{order:4; width:100%; flex-direction:column; align-items:stretch; gap:8px}
+    .hdr-sync .syncwrap{display:flex; width:100%}
+    .hdr-sync .syncwrap .splitmain{flex:1; justify-content:center}
+    .hdr-sync #hDiaria{width:100%; justify-content:center}
+    .syncarea{padding:9px 16px}
     .tabbar{padding:0 10px}
     .tabbar button{padding:13px 11px; font-size:13.5px}
     .page{padding:22px 18px 54px}
