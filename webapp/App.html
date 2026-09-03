@@ -15,6 +15,7 @@ function mensajeError(e){
   var m=(e&&e.message)?e.message:String(e);
   if(m.indexOf('NO_MIEMBRO')!==-1) return 'No puedes sincronizar los contactos del centro porque no perteneces al claustro.';
   if(m.indexOf('NO_AUTORIZADO')!==-1) return 'No tienes permisos de administrador.';
+  if(m.indexOf('NO_PRINCIPAL')!==-1) return 'Solo el administrador principal puede hacer esto.';
   return 'Se ha producido un error: '+m;
 }
 function resumenTexto(r){

@@ -85,14 +85,27 @@ function pintar(cont, estado, s){
     var filas = ['<div style="display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap">'+
       '<span class="chip solo" style="--h:'+hue(owner)+'">'+esc(s.adminEmail)+'</span>'+
       '<span class="badge admin">'+icon('config')+'Principal</span>'+(owner===yo?'<span class="muted">· tú</span>':'')+'</div>'];
+    var soyPrincipal = (owner===yo);
     adminsLocal.forEach(function(e){
+      var mk = soyPrincipal ? '<button class="btn sm" data-mk="'+esc(e)+'" title="Hacer administrador principal">'+icon('ok')+'Hacer principal</button>' : '';
       filas.push('<div style="display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap">'+
         '<span class="chip solo" style="--h:'+hue(e)+'">'+esc(e)+'</span>'+(e===yo?'<span class="muted">· tú</span>':'')+
+        mk+
         '<button class="btn danger sm icononly" data-rm="'+esc(e)+'" title="Quitar">'+icon('borrar')+'</button></div>');
     });
     box.innerHTML = filas.join('');
     Array.prototype.forEach.call(box.querySelectorAll('button[data-rm]'), function(b){
       b.onclick = function(){ var e=b.getAttribute('data-rm'); adminsLocal = adminsLocal.filter(function(x){return x!==e;}); pintarAdmins(); };
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('button[data-mk]'), function(b){
+      b.onclick = function(){
+        var e=b.getAttribute('data-mk');
+        if(!confirm('¿Hacer a '+e+' administrador principal?\n\nTú dejarás de ser el principal (seguirás como administrador). Solo el principal actual puede decidir esto.')) return;
+        correr(this, cont.querySelector('#sAdmins'), 'Traspasando…',
+          function(r){ r.hacerPrincipal(e); },
+          function(res, st){ owner=(res.owner||'').toLowerCase(); adminsLocal=(res.extra||[]).slice(); pintarAdmins();
+            setStatus(st, 'Administrador principal: '+res.owner+'.', 'ok'); });
+      };
     });
   }
   pintarAdmins();

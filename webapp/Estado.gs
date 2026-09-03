@@ -60,6 +60,26 @@ function esAdmin_(email) {
   return getAdminsExtra_().indexOf(email.trim().toLowerCase()) !== -1;
 }
 
+/**
+ * Traspasa el rol de administrador PRINCIPAL a otro correo. El principal
+ * antiguo NO se expulsa: pasa a ser administrador adicional (evita bloqueos).
+ * Devuelve el correo del nuevo principal.
+ */
+function traspasarAdminPrincipal_(nuevoEmail) {
+  const nuevo = String(nuevoEmail || '').trim().toLowerCase();
+  if (!nuevo) throw new Error('EMAIL_VACIO');
+  const antiguo = getAdminEmail_().trim().toLowerCase();
+  if (nuevo === antiguo) return getAdminEmail_();  // sin cambios
+
+  PropertiesService.getScriptProperties().setProperty(PROP_ADMIN, nuevo);
+  // Reconstruye la lista de adicionales: el nuevo deja de estar (ya es principal)
+  // y el antiguo se conserva como adicional. setAdminsExtra_ ya excluye al owner.
+  let extra = getAdminsExtra_().filter(function (e) { return e !== nuevo; });
+  if (antiguo && extra.indexOf(antiguo) === -1) extra.push(antiguo);
+  setAdminsExtra_(extra);
+  return nuevo;
+}
+
 /** Lista de administradores adicionales (en minúsculas), con caché. */
 function getAdminsExtra_() {
   const cache = cacheScript_();

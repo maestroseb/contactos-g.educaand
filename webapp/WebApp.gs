@@ -106,6 +106,13 @@ function guardarAdmins(lista) {
   return { owner: getAdminEmail_(), extra: guardados };
 }
 
+/** Traspasa el rol de principal (solo el principal actual puede hacerlo). */
+function hacerPrincipal(email) {
+  exigirAdminPrincipal_();
+  traspasarAdminPrincipal_(email);
+  return { owner: getAdminEmail_(), extra: getAdminsExtra_() };
+}
+
 /** Verifica un código de centro contra el catálogo. */
 function verificarCentro(codigo) {
   const nombre = nombreDeCentroPorCodigo_(codigo);
@@ -171,4 +178,8 @@ function guardarPropios(lista) {
 
 function exigirAdmin_() {
   if (!esAdmin_(correoUsuarioActual_())) throw new Error('NO_AUTORIZADO');
+}
+
+function exigirAdminPrincipal_() {
+  if (!esAdminPrincipal_(correoUsuarioActual_())) throw new Error('NO_PRINCIPAL');
 }
