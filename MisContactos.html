@@ -88,7 +88,7 @@ window.TABS.misContactos = {
       if(!cargado || !tags.length){ box.hidden = true; box.innerHTML=''; return; }
       box.hidden = false;
       box.innerHTML = '<span class="flbl">Filtrar:</span>'+
-        '<span class="chip clic'+(filtro?'':' armed')+'" data-f="" style="--h:250">Todas</span>'+
+        '<span class="chip clic'+(filtro?'':' armed')+'" data-f="" style="--h:186">Todas</span>'+
         tags.map(function(t){
           return '<span class="chip clic'+(filtro&&filtro.toLowerCase()===t.toLowerCase()?' armed':'')+'" data-f="'+esc(t)+'" style="--h:'+hue(t)+'">'+esc(t)+'</span>';
         }).join('');
@@ -109,7 +109,7 @@ window.TABS.misContactos = {
         filtradas.map(function(r){
           return '<tr data-id="'+r.id+'">'+
             celda(r,'nombre')+celda(r,'apellidos')+celda(r,'email')+celda(r,'telefono')+
-            '<td class="puesto-cell"><input data-k="puesto" class="chipinput" size="'+Math.max(3,(r.puesto||'').length)+'" style="--h:'+(r.puesto?hue(r.puesto):250)+'" value="'+esc(r.puesto||'')+'"></td>'+
+            '<td class="puesto-cell"><input data-k="puesto" class="chipinput" size="'+Math.max(3,(r.puesto||'').length)+'" style="--h:'+(r.puesto?hue(r.puesto):186)+'" value="'+esc(r.puesto||'')+'"></td>'+
             '<td class="etqs"></td>'+
             '<td class="act"><button class="btn danger sm icononly bdel" title="Eliminar">'+icon('borrar')+'</button></td>'+
           '</tr>';
@@ -229,7 +229,7 @@ function filaPropio(tb, c, onChange){
     '<td><input data-k="apellidos" value="'+esc(c.apellidos||'')+'"></td>'+
     '<td><input data-k="email" value="'+esc(c.email||'')+'"></td>'+
     '<td><input data-k="telefono" value="'+esc(c.telefono||'')+'"></td>'+
-    '<td class="puesto-cell"><input data-k="puesto" class="chipinput" size="'+Math.max(3,pv.length)+'" style="--h:'+(pv?hue(pv):250)+'" value="'+esc(pv)+'"></td>'+
+    '<td class="puesto-cell"><input data-k="puesto" class="chipinput" size="'+Math.max(3,pv.length)+'" style="--h:'+(pv?hue(pv):186)+'" value="'+esc(pv)+'"></td>'+
     '<td class="etqs"></td>'+
     '<td class="act"><button class="btn danger sm icononly" title="Quitar fila">'+icon('borrar')+'</button></td>';
   var puestoInp = tr.querySelector('input[data-k="puesto"]');

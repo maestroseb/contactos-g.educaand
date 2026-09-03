@@ -67,8 +67,11 @@ function include(nombre) {
 function getEstadoInicial() {
   const email = correoUsuarioActual_();
   const cfg = getConfig_() || {};   // una sola lectura (cacheada)
+  const perfil = perfilUsuarioActual_(email);
   return {
     email: email,
+    nombreUsuario: perfil.nombre,
+    fotoUsuario: perfil.foto,
     esAdmin: esAdmin_(email),
     configurado: !!cfg.completo,
     nombreApp: PARAMS.nombreApp,
@@ -185,6 +188,55 @@ function sincronizarAhora(opciones) { return sincronizar(opciones); }
 function guardarPropios(lista) {
   guardarContactosPropios_(lista || []);
   return leerContactosPropios_();
+}
+
+/* ------------------------------ Perfil ------------------------------ */
+
+/**
+ * Perfil visible del usuario actual: { nombre, foto }. Best-effort.
+ *   - Lee el propio perfil de Google (People API) para el nombre y la foto.
+ *   - Si no hay foto real (o falta permiso de perfil), la foto queda vacía y la
+ *     interfaz usa el avatar con la inicial.
+ *   - Si no se obtiene el nombre, se recurre al que figure en el claustro.
+ * Nunca lanza: ante cualquier fallo devuelve lo que tenga (posiblemente vacío)
+ * y la interfaz cae en el correo. El resultado se cachea por usuario.
+ */
+function perfilUsuarioActual_(email) {
+  const cache = (function () { try { return CacheService.getUserCache(); } catch (e) { return null; } })();
+  if (cache) {
+    const c = cache.get('perfil_v1');
+    if (c) { try { return JSON.parse(c); } catch (e) { /* cae y recalcula */ } }
+  }
+
+  const perfil = { nombre: '', foto: '' };
+  try {
+    const me = People.People.get('people/me', { personFields: 'names,photos' });
+    if (me && me.names && me.names.length) {
+      const n = me.names.filter(x => x.metadata && x.metadata.primary)[0] || me.names[0];
+      perfil.nombre = String(n.displayName || '').trim();
+    }
+    if (me && me.photos && me.photos.length) {
+      const p = me.photos.filter(x => x.metadata && x.metadata.primary)[0] || me.photos[0];
+      // `default:true` = foto genérica de Google (letra); en ese caso usamos la inicial.
+      if (p && p.url && !p.default) perfil.foto = String(p.url).trim();
+    }
+  } catch (e) { /* sin permiso de perfil o API no disponible: seguimos con lo que haya */ }
+
+  if (!perfil.nombre) perfil.nombre = nombreEnClaustro_(email);
+
+  if (cache) { try { cache.put('perfil_v1', JSON.stringify(perfil), 21600); } catch (e) {} }
+  return perfil;
+}
+
+/** Nombre completo (nombre + apellidos) del correo dado según el claustro, o ''. */
+function nombreEnClaustro_(email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return '';
+  const c = leerContactosCentroStore_().filter(function (x) {
+    return x && x.email && String(x.email).trim().toLowerCase() === e;
+  })[0];
+  if (!c) return '';
+  return [c.nombre, c.apellidos].filter(Boolean).join(' ').trim();
 }
 
 /* ------------------------------- Utilidad ------------------------------- */
