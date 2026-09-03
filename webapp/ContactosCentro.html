@@ -248,7 +248,12 @@ window.TABS.contactosCentro = {
       var tabla = zona.querySelector('table');
       // inputs de texto
       Array.prototype.forEach.call(zona.querySelectorAll('input[data-k]'), function(inp){
-        inp.oninput = function(){ var f=fila(inp); if(f) f[inp.getAttribute('data-k')] = inp.value; revisarClaustro(); };
+        inp.oninput = function(){
+          var f=fila(inp), k=inp.getAttribute('data-k');
+          if(f) f[k] = inp.value;
+          if(k==='puesto'){ inp.size = Math.max(3, inp.value.length); inp.style.setProperty('--h', inp.value?hue(inp.value):250); }
+          revisarClaustro();
+        };
       });
       // selección
       var selall = zona.querySelector('.selall');
@@ -340,7 +345,14 @@ window.TABS.contactosCentro = {
         return '<span class="chip" style="--h:'+hue(t)+'">'+esc(t)+'<span class="x" data-x="'+esc(t)+'">'+cerrarSvg()+'</span></span>';
       }).join('');
     }
-    function celdaTxt(f,k){ return '<td><input data-k="'+k+'" value="'+esc(f[k]||'')+'"></td>'; }
+    function celdaTxt(f,k){
+      var v = f[k]||'';
+      if(k==='puesto'){
+        return '<td class="puesto-cell"><input data-k="puesto" class="chipinput" size="'+Math.max(3,v.length)+'" '+
+          'style="--h:'+(v?hue(v):250)+'" value="'+esc(v)+'"></td>';
+      }
+      return '<td><input data-k="'+k+'" value="'+esc(v)+'"></td>';
+    }
     function fila(el){ var tr=el.closest('tr'); var id=tr.getAttribute('data-id'); return FILAS.filter(function(x){return x.id===id;})[0]; }
 
     function toggleTag(f, tag, add){
