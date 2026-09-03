@@ -44,7 +44,7 @@ function chipCellEditor(td, grupos, onChange){
 function armarChipInput(inp){
   function tam(){ inp.size = Math.max(3, (inp.value || '').length || 3); }
   function comoChip(){
-    inp.style.setProperty('--h', inp.value ? hue(inp.value) : 250);
+    inp.style.setProperty('--h', inp.value ? hue(inp.value) : 186);
     inp.classList.toggle('aschip', !!inp.value.trim());
   }
   inp.addEventListener('input', tam);
@@ -251,7 +251,14 @@ function tabsOrdenadas(estado){
 function construirShell(estado, preferida){
   PANELS = {};   // el shell se reconstruye: descartamos los paneles anteriores
   var tabs = tabsOrdenadas(estado);
-  var inicial = estado.email ? estado.email.trim().charAt(0).toUpperCase() : '?';
+  // Identidad del usuario: nombre visible (o correo), inicial y foto de perfil.
+  var nombreUsuario = (estado.nombreUsuario || '').trim();
+  var etiquetaUsuario = nombreUsuario || estado.email || '—';
+  var inicial = (nombreUsuario || estado.email || '?').trim().charAt(0).toUpperCase() || '?';
+  var avatarHtml = estado.fotoUsuario
+    ? '<img class="avatar" src="'+esc(estado.fotoUsuario)+'" alt="" referrerpolicy="no-referrer" '+
+      'onerror="this.outerHTML=\'<span class=&quot;avatar&quot;>'+esc(inicial)+'</span>\'">'
+    : '<span class="avatar">'+esc(inicial)+'</span>';
   var necesitaConfig = estado.esAdmin && !estado.configurado;
 
   var nav = tabs.map(function(t){
@@ -278,9 +285,9 @@ function construirShell(estado, preferida){
             '</div>'+
             '<span class="sep"></span>'+
             '<div class="userbox" title="'+esc(estado.email||'')+'">'+
-              '<span class="avatar">'+esc(inicial)+'</span>'+
+              avatarHtml+
               '<span class="uinfo">'+
-                '<b>'+esc(estado.email||'—')+'</b>'+
+                '<b>'+esc(etiquetaUsuario)+'</b>'+
                 '<small class="'+(estado.esAdmin?'is-admin':'')+'">'+icon(estado.esAdmin?'config':'yo')+
                   (estado.esAdmin?'Administrador':'Profesorado')+'</small>'+
               '</span>'+
