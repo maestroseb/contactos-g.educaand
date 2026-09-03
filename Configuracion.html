@@ -107,12 +107,15 @@ function pintar(cont, estado, s){
     });
     Array.prototype.forEach.call(box.querySelectorAll('button[data-mk]'), function(b){
       b.onclick = function(){
-        var e=b.getAttribute('data-mk');
-        if(!confirm('¿Hacer a '+e+' administrador principal?\n\nTú dejarás de ser el principal (seguirás como administrador). Solo el principal actual puede decidir esto.')) return;
-        correr(this, cont.querySelector('#sAdmins'), 'Traspasando…',
-          function(r){ r.hacerPrincipal(e); },
-          function(res, st){ owner=(res.owner||'').toLowerCase(); adminsLocal=(res.extra||[]).slice(); pintarAdmins();
-            setStatus(st, 'Administrador principal: '+res.owner+'.', 'ok'); });
+        var e=b.getAttribute('data-mk'), btnMk=this;
+        modalConfirmar({ titulo:'Cambiar administrador principal', icono:'config', aceptar:'Sí, traspasar',
+          mensaje:'¿Hacer a '+e+' administrador principal?\n\nTú dejarás de ser el principal (seguirás como administrador). Solo el principal actual puede decidir esto.',
+          onAceptar:function(){
+            correr(btnMk, cont.querySelector('#sAdmins'), 'Traspasando…',
+              function(r){ r.hacerPrincipal(e); },
+              function(res, st){ owner=(res.owner||'').toLowerCase(); adminsLocal=(res.extra||[]).slice(); pintarAdmins();
+                setStatus(st, 'Administrador principal: '+res.owner+'.', 'ok'); });
+          }});
       };
     });
   }
@@ -204,7 +207,7 @@ function pintar(cont, estado, s){
         otros: lineasDe(cont.querySelector('#etqOtros').value)
       }
     };
-    if(!cfg.nombreCentro){ alert('Falta el nombre del centro.'); return; }
+    if(!cfg.nombreCentro){ modalAviso('Falta el nombre del centro.'); return; }
     var eraPend = !estado.configurado;
     this.disabled = true; this.textContent = 'Guardando…';
     google.script.run
@@ -220,7 +223,7 @@ function pintar(cont, estado, s){
         floatBtn.disabled=false; floatBtn.hidden=true; floatBtn.innerHTML=icon('ok')+'Guardado';
         setTimeout(function(){ floatBtn.innerHTML=icon('guardar')+'Guardar configuración'; }, 1500);
       })
-      .withFailureHandler(function(e){ floatBtn.disabled=false; floatBtn.innerHTML=icon('guardar')+'Guardar configuración'; alert(mensajeError(e)); })
+      .withFailureHandler(function(e){ floatBtn.disabled=false; floatBtn.innerHTML=icon('guardar')+'Guardar configuración'; modalAviso(mensajeError(e)); })
       .guardarConfiguracion(cfg);
   };
 }

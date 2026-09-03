@@ -113,6 +113,46 @@ function modalPegar(cfg){
   setTimeout(function(){ ta.focus(); }, 30);
   return { cerrar: cerrar };
 }
+/**
+ * Modal de confirmación/aviso con el estilo de la app (sustituye a los
+ * confirm()/alert() nativos del navegador, que son feos y ajenos al diseño).
+ * cfg = { titulo, mensaje, aceptar, cancelar (texto; false para ocultarlo),
+ *         peligro (bool -> botón rojo), icono, onAceptar() }
+ * El mensaje respeta los saltos de línea (\n). Devuelve { cerrar }.
+ */
+function modalConfirmar(cfg){
+  cfg = cfg || {};
+  var mostrarCancelar = cfg.cancelar !== false;
+  var ov = document.createElement('div');
+  ov.className = 'modal-ov';
+  ov.innerHTML =
+    '<div class="modal modal-sm" role="alertdialog" aria-modal="true">'+
+      '<div class="modal-head"><h3 class="'+(cfg.peligro?'is-danger':'')+'">'+icon(cfg.icono||'alerta')+esc(cfg.titulo||'Confirmar')+'</h3>'+
+        '<button class="btn ghost sm icononly modal-x" title="Cerrar">'+icon('cerrar')+'</button></div>'+
+      '<p class="modal-msg">'+esc(cfg.mensaje||'')+'</p>'+
+      '<div class="modal-foot">'+
+        (mostrarCancelar?'<button class="btn ghost modal-cancel">'+esc(cfg.cancelar||'Cancelar')+'</button>':'')+
+        '<button class="btn '+(cfg.peligro?'danger':'primary')+' modal-ok">'+esc(cfg.aceptar||'Aceptar')+'</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  function cerrar(){ if(ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); }
+  function aceptar(){ cerrar(); if(cfg.onAceptar) cfg.onAceptar(); }
+  function onKey(e){ if(e.key==='Escape'){ e.preventDefault(); cerrar(); } else if(e.key==='Enter'){ e.preventDefault(); aceptar(); } }
+  document.addEventListener('keydown', onKey);
+  ov.addEventListener('mousedown', function(e){ if(e.target===ov) cerrar(); });
+  ov.querySelector('.modal-x').onclick = cerrar;
+  var cancelBtn = ov.querySelector('.modal-cancel'); if(cancelBtn) cancelBtn.onclick = cerrar;
+  ov.querySelector('.modal-ok').onclick = aceptar;
+  setTimeout(function(){ ov.querySelector('.modal-ok').focus(); }, 30);
+  return { cerrar: cerrar };
+}
+
+/** Aviso simple de un solo botón, con el estilo de la app (sustituye a alert()). */
+function modalAviso(mensaje, titulo){
+  return modalConfirmar({ titulo: titulo || 'Aviso', mensaje: mensaje, aceptar: 'Entendido', cancelar: false });
+}
+
 /** Ejecuta una llamada al servidor gestionando botón y estado. */
 function correr(btn, st, cargando, runFn, okFn){
   if(btn) btn.disabled=true;
@@ -370,7 +410,7 @@ function construirShell(estado, preferida){
     var activar = !estado.diariaActiva; this.disabled=true;
     var run=google.script.run
       .withSuccessHandler(function(){ recargarApp(TAB_ACTIVA); })
-      .withFailureHandler(function(e){ alert(mensajeError(e)); });
+      .withFailureHandler(function(e){ modalAviso(mensajeError(e)); });
     if(activar) run.activarSincronizacionDiaria({incluirCentro:true, incluirPropios:true});
     else run.desactivarSincronizacionDiaria();
   };

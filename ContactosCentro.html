@@ -65,10 +65,14 @@ window.TABS.contactosCentro = {
         function(n, st){ filasInicial = serializarFilas(); revisarClaustro(); setStatus(st, 'Guardado: '+n+' personas en el claustro.', 'ok'); });
     };
     cont.querySelector('#bVaciar').onclick = function(){
-      if(!confirm('¿Vaciar TODA la lista del claustro?\n\nSolo borra la lista del centro; no elimina contactos de Google de nadie.')) return;
-      correr(this, cont.querySelector('#sAdmin'), 'Vaciando…',
-        function(r){ r.adminGuardarContactos([]); },
-        function(n, st){ FILAS=[filaVacia()]; SEL.clear(); pintarPaleta(); renderGrid(); filasInicial = serializarFilas(); revisarClaustro(); setStatus(st, 'Lista del claustro vaciada.', 'ok'); });
+      var btn = this;
+      modalConfirmar({ titulo:'Vaciar el claustro', icono:'borrar', peligro:true, aceptar:'Vaciar',
+        mensaje:'¿Vaciar TODA la lista del claustro?\n\nSolo borra la lista del centro; no elimina contactos de Google de nadie.',
+        onAceptar:function(){
+          correr(btn, cont.querySelector('#sAdmin'), 'Vaciando…',
+            function(r){ r.adminGuardarContactos([]); },
+            function(n, st){ FILAS=[filaVacia()]; SEL.clear(); pintarPaleta(); renderGrid(); filasInicial = serializarFilas(); revisarClaustro(); setStatus(st, 'Lista del claustro vaciada.', 'ok'); });
+        }});
     };
     cont.querySelector('#bImport').onclick = function(){
       modalPegar({
