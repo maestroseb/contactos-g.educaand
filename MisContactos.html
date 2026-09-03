@@ -187,8 +187,13 @@ window.TABS.misContactos = {
         if(g.editados.length)   msg += '· '+g.editados.length+' editado(s)\n';
         if(g.eliminados.length) msg += '· '+g.eliminados.length+' eliminado(s)\n';
         msg += '\n¿Continuar?';
-        if(!confirm(msg)) return;
+        modalConfirmar({ titulo:'Guardar cambios', icono:'guardar', aceptar:'Continuar',
+          peligro:!!g.eliminados.length, mensaje:msg, onAceptar:proceder });
+      } else {
+        proceder();
       }
+
+      function proceder(){
       btn.disabled = true; setStatus(sMis, 'Guardando…', 'busy');
 
       function guardarGoogle(){
@@ -214,6 +219,7 @@ window.TABS.misContactos = {
           .guardarPropios(leerPropios(tb));
       } else {
         guardarGoogle();
+      }
       }
     };
   }
