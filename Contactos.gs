@@ -226,13 +226,6 @@ function getMisContactos() {
   }));
 }
 
-/** Elimina un contacto por resourceName. */
-function eliminarContacto(resourceName) {
-  People.People.deleteContact(resourceName);
-  eliminarGruposVacios_();
-  return true;
-}
-
 /**
  * Aplica en bloque los cambios hechos en la rejilla de «Mis contactos de Google».
  * Solo toca lo que realmente cambió (cada edición trae su propia máscara de
