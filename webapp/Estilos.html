@@ -302,6 +302,7 @@
 
   /* ---------- Feedback ---------- */
   .status{font-size:13.5px; color:var(--ink-soft); min-height:20px; margin:12px 0 0; display:flex; align-items:center; gap:7px}
+  .status:empty{display:none}   /* sin «barriga»: no ocupa hueco cuando está vacío */
   .status .ico{width:16px;height:16px}
   .status.ok{color:var(--good)} .status.err{color:var(--danger)} .status.busy{color:var(--ink-soft)}
   .callout{display:flex; gap:11px; padding:14px 16px; border-radius:var(--r); font-size:13.5px; align-items:flex-start; line-height:1.5}

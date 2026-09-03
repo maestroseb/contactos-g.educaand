@@ -9,26 +9,30 @@ window.TABS.misContactos = {
     cont.innerHTML = [
       // Gestionar mis contactos de Google (arriba del todo)
       '<div class="card">',
-        '<h2>'+icon('correo')+'Gestionar mis contactos de Google</h2>',
+        '<div class="card-head">',
+          '<h2>'+icon('correo')+'Gestionar mis contactos de Google</h2>',
+          '<button class="btn" id="bTraer">'+icon('sync')+'Traer mis contactos</button>',
+        '</div>',
         '<p class="desc">Trae tus contactos actuales para revisarlos o eliminarlos. La sincronización está arriba, en «Sincronizar».</p>',
-        '<div class="row"><button class="btn" id="bTraer">'+icon('sync')+'Traer mis contactos</button></div>',
-        '<p class="status" id="sMis"></p><div id="tablaMis" style="margin-top:14px"></div>',
+        '<p class="status" id="sMis"></p><div id="tablaMis"></div>',
       '</div>',
 
       // Añadir contactos propios
       '<div class="card">',
-        '<h2>'+icon('yo')+'Mis contactos propios</h2>',
+        '<div class="card-head">',
+          '<h2>'+icon('yo')+'Mis contactos propios</h2>',
+          '<button class="btn" id="bImport">'+icon('importar')+'Importar (pegar)…</button>',
+        '</div>',
         '<p class="desc">Contactos que añades tú y que se guardan solo en tu cuenta. Se sincronizan junto con los del centro al pulsar «Sincronizar» arriba.</p>',
         '<div class="tablewrap"><table id="tPropios" class="rejilla"><thead><tr>',
           '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas (coma)</th><th></th>',
         '</tr></thead><tbody></tbody></table></div>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir fila</button>',
-          '<button class="btn" id="bImport">'+icon('importar')+'Importar (pegar)…</button>',
-          '<button class="btn primary" id="bGuardar" style="margin-left:auto">'+icon('guardar')+'Guardar mis contactos</button>',
         '</div>',
         '<p class="status" id="sPropios"></p>',
-      '</div>'
+      '</div>',
+      '<button class="btn primary floatsave" id="propiosSave" hidden>'+icon('guardar')+'Guardar mis contactos</button>'
     ].join('');
 
     // Gestionar Google contacts
@@ -38,16 +42,29 @@ window.TABS.misContactos = {
         function(lista, st){ pintarMis(cont, lista); setStatus(st, lista.length+' contactos.', 'ok'); });
     };
 
-    // Propios: rejilla
+    // Propios: rejilla + detección de cambios (el botón Guardar flota y aparece solo si hay cambios).
     var tb = cont.querySelector('#tPropios tbody');
-    (estado.contactosPropios||[]).forEach(function(c){ filaPropio(tb, c); });
-    if(!tb.children.length) filaPropio(tb, {});
-    habilitarPegado(tb, filaPropio);
-    cont.querySelector('#bAdd').onclick = function(){ filaPropio(tb, {}); };
-    cont.querySelector('#bGuardar').onclick = function(){
+    var propiosInicial = null;
+    function revisarPropios(){
+      var b = cont.querySelector('#propiosSave');
+      if(!b || propiosInicial === null) return;
+      b.hidden = (JSON.stringify(leerPropios(tb)) === propiosInicial);
+    }
+    function nuevaFila(t, o){ filaPropio(t, o, revisarPropios); }
+
+    (estado.contactosPropios||[]).forEach(function(c){ nuevaFila(tb, c); });
+    if(!tb.children.length) nuevaFila(tb, {});
+    habilitarPegado(tb, nuevaFila);
+    tb.addEventListener('input', revisarPropios);
+    tb.addEventListener('paste', function(){ setTimeout(revisarPropios, 0); });
+    propiosInicial = JSON.stringify(leerPropios(tb)); revisarPropios();
+
+    cont.querySelector('#bAdd').onclick = function(){ nuevaFila(tb, {}); revisarPropios(); };
+    cont.querySelector('#propiosSave').onclick = function(){
       correr(this, cont.querySelector('#sPropios'), 'Guardando…',
         function(r){ r.guardarPropios(leerPropios(tb)); },
-        function(res, st){ setStatus(st, 'Guardado ('+res.length+'). Pulsa «Sincronizar» arriba para subirlos.', 'ok'); });
+        function(res, st){ propiosInicial = JSON.stringify(leerPropios(tb)); revisarPropios();
+          setStatus(st, 'Guardado ('+res.length+'). Pulsa «Sincronizar» arriba para subirlos.', 'ok'); });
     };
 
     // Importar (pegado inteligente) — en un modal
@@ -63,7 +80,8 @@ window.TABS.misContactos = {
           google.script.run
             .withSuccessHandler(function(lista){
               if(tb.children.length===1){ var v=leerPropios(tb); if(!v.length) tb.innerHTML=''; }
-              (lista||[]).forEach(function(c){ filaPropio(tb, c); });
+              (lista||[]).forEach(function(c){ nuevaFila(tb, c); });
+              revisarPropios();
               ctx.cerrar();
               setStatus(cont.querySelector('#sPropios'), 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar mis contactos».', 'ok');
             })
@@ -75,13 +93,13 @@ window.TABS.misContactos = {
   }
 };
 
-function filaPropio(tb, c){
+function filaPropio(tb, c, onChange){
   var tr=document.createElement('tr'), ks=['nombre','apellidos','email','telefono','puesto','grupos'];
   tr.innerHTML = ks.map(function(k){
     var v = k==='grupos'?(c.grupos||[]).join(', '):(c[k]||'');
     return '<td><input data-k="'+k+'" value="'+esc(v)+'"></td>';
   }).join('')+'<td class="act"><button class="btn danger sm icononly" title="Quitar fila">'+icon('borrar')+'</button></td>';
-  tr.querySelector('button').onclick=function(){ tr.remove(); };
+  tr.querySelector('button').onclick=function(){ tr.remove(); if(onChange) onChange(); };
   tb.appendChild(tr);
 }
 function leerPropios(tb){
@@ -98,7 +116,7 @@ function leerPropios(tb){
 function pintarMis(cont, lista){
   var box=cont.querySelector('#tablaMis');
   if(!lista.length){ box.innerHTML='<p class="muted">No hay contactos.</p>'; return; }
-  box.innerHTML='<div class="tablewrap"><table><thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Organización / DPTO</th><th>Etiquetas</th><th></th></tr></thead><tbody>'+
+  box.innerHTML='<div class="tablewrap" style="margin-top:14px"><table><thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Organización / DPTO</th><th>Etiquetas</th><th></th></tr></thead><tbody>'+
     lista.map(function(c){
       return '<tr><td>'+esc(c.nombre)+'</td><td>'+esc(c.apellidos)+'</td><td>'+esc(c.email)+'</td><td>'+
         esc(c.telefono||'')+'</td><td>'+esc(c.puesto||'')+'</td><td>'+

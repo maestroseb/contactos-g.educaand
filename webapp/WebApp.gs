@@ -28,10 +28,12 @@ function doGet(e) {
 function paginaApp_(email, esAdmin) {
   const t = HtmlService.createTemplateFromFile('Index');
   t.esAdmin = esAdmin;
-  return t.evaluate()
-    .setTitle(PARAMS.icono + ' ' + PARAMS.nombreApp)
+  const out = t.evaluate()
+    .setTitle(PARAMS.nombreApp)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  ponerFavicon_(out);
+  return out;
 }
 
 function paginaDenegado_(email, motivo) {
@@ -40,9 +42,16 @@ function paginaDenegado_(email, motivo) {
   t.nombreCentro = nombreCentro_();
   t.nombreApp = PARAMS.nombreApp;
   t.motivo = motivo || '';
-  return t.evaluate()
-    .setTitle(PARAMS.icono + ' ' + PARAMS.nombreApp)
+  const out = t.evaluate()
+    .setTitle(PARAMS.nombreApp)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  ponerFavicon_(out);
+  return out;
+}
+
+/** Aplica el favicon sin romper la carga si la plataforma rechaza el data URI. */
+function ponerFavicon_(out) {
+  try { out.setFaviconUrl(FAVICON_URL); } catch (e) { /* se queda el favicon por defecto */ }
 }
 
 /** Permite incluir un archivo HTML dentro de otro. */
