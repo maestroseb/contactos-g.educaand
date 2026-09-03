@@ -6,72 +6,153 @@ window.TABS.misContactos = {
   orden: 1, label: 'Mis contactos', icono: 'yo',
   titulo: 'Mis contactos', sub: 'Gestiona tus contactos y añade los tuyos propios',
   render: function (cont, estado) {
+    var seq = 0;
+    // Rejilla de contactos de Google
+    var MIS = [], MIS_ORIG = {}, filtro = null, cargado = false;
+    // Rejilla de contactos propios
+    var tb, propiosInicial = null;
+
     cont.innerHTML = [
-      // Gestionar mis contactos de Google (arriba del todo)
+      // Mis contactos de Google (rejilla editable)
       '<div class="card">',
         '<div class="card-head">',
-          '<h2>'+icon('correo')+'Gestionar mis contactos de Google</h2>',
+          '<h2>'+icon('correo')+'Mis contactos de Google</h2>',
           '<button class="btn" id="bTraer">'+icon('sync')+'Traer mis contactos</button>',
         '</div>',
-        '<p class="desc">Trae tus contactos actuales para revisarlos o eliminarlos. La sincronización está arriba, en «Sincronizar».</p>',
-        '<p class="status" id="sMis"></p><div id="tablaMis"></div>',
+        '<p class="desc">Trae tus contactos de Google para revisarlos, editarlos o eliminarlos. Los cambios se acumulan y se aplican a tu cuenta en bloque al pulsar «Guardar cambios».</p>',
+        '<div class="tagfilter" id="misFiltro" hidden></div>',
+        '<div id="misZona"><p class="muted">Pulsa «Traer mis contactos» para cargarlos.</p></div>',
+        '<p class="status" id="sMis"></p>',
       '</div>',
 
-      // Añadir contactos propios
+      // Mis contactos propios
       '<div class="card">',
         '<div class="card-head">',
           '<h2>'+icon('yo')+'Mis contactos propios</h2>',
           '<button class="btn" id="bImport">'+icon('importar')+'Importar (pegar)…</button>',
         '</div>',
         '<p class="desc">Contactos que añades tú y que se guardan solo en tu cuenta. Se sincronizan junto con los del centro al pulsar «Sincronizar» arriba.</p>',
-        '<div class="tablewrap"><table id="tPropios" class="rejilla"><thead><tr>',
-          '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas (coma)</th><th></th>',
+        '<div class="tablewrap"><table id="tPropios" class="rejilla mis"><thead><tr>',
+          '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas</th><th></th>',
         '</tr></thead><tbody></tbody></table></div>',
-        '<div class="row" style="margin-top:14px">',
-          '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir fila</button>',
-        '</div>',
+        '<div class="row" style="margin-top:14px"><button class="btn sm" id="bAdd">'+icon('add')+'Añadir fila</button></div>',
         '<p class="status" id="sPropios"></p>',
       '</div>',
-      '<button class="btn primary floatsave" id="propiosSave" hidden>'+icon('guardar')+'Guardar mis contactos</button>'
+
+      '<button class="btn primary floatsave" id="misSave" hidden>'+icon('guardar')+'Guardar cambios</button>'
     ].join('');
 
-    // Gestionar Google contacts
-    cont.querySelector('#bTraer').onclick = function(){
-      correr(this, cont.querySelector('#sMis'), 'Cargando tus contactos…',
-        function(r){ r.getMisContactos(); },
-        function(lista, st){ pintarMis(cont, lista); setStatus(st, lista.length+' contactos.', 'ok'); });
-    };
+    var sMis = cont.querySelector('#sMis'), sPropios = cont.querySelector('#sPropios');
 
-    // Propios: rejilla + detección de cambios (el botón Guardar flota y aparece solo si hay cambios).
-    var tb = cont.querySelector('#tPropios tbody');
-    var propiosInicial = null;
-    function revisarPropios(){
-      var b = cont.querySelector('#propiosSave');
-      if(!b || propiosInicial === null) return;
-      b.hidden = (JSON.stringify(leerPropios(tb)) === propiosInicial);
+    /* ===================== Contactos de Google ===================== */
+    function norm(c){
+      return { id:'m'+(seq++), resourceName:c.resourceName, etag:c.etag,
+        nombre:c.nombre||'', apellidos:c.apellidos||'', email:c.email||'',
+        telefono:c.telefono||'', puesto:c.puesto||'', grupos:(c.grupos||[]).slice() };
     }
-    function nuevaFila(t, o){ filaPropio(t, o, revisarPropios); }
+    function snap(r){ return { nombre:r.nombre, apellidos:r.apellidos, email:r.email, telefono:r.telefono, puesto:r.puesto, grupos:(r.grupos||[]).slice() }; }
+    function filaDe(id){ return MIS.filter(function(x){ return x.id===id; })[0]; }
+    function igualesGrupos(a,b){
+      var A=(a||[]).map(function(x){return x.toLowerCase();}).sort(), B=(b||[]).map(function(x){return x.toLowerCase();}).sort();
+      return A.join('|')===B.join('|');
+    }
+    function maskDe(r){
+      var o = MIS_ORIG[r.resourceName]; if(!o) return '';
+      var m = [];
+      if((r.nombre||'')!==(o.nombre||'') || (r.apellidos||'')!==(o.apellidos||'')) m.push('names');
+      if((r.email||'')!==(o.email||'')) m.push('emailAddresses');
+      if((r.telefono||'')!==(o.telefono||'')) m.push('phoneNumbers');
+      if((r.puesto||'')!==(o.puesto||'')) m.push('organizations');
+      if(!igualesGrupos(r.grupos, o.grupos)) m.push('memberships');
+      return m.join(',');
+    }
+    function cambiosGoogle(){
+      var editados = [], eliminados = [], vivos = {};
+      MIS.forEach(function(r){
+        if(!r.resourceName) return;
+        vivos[r.resourceName] = true;
+        if(MIS_ORIG[r.resourceName]){
+          var m = maskDe(r);
+          if(m) editados.push({ resourceName:r.resourceName, etag:r.etag, mask:m,
+            nombre:r.nombre, apellidos:r.apellidos, email:r.email, telefono:r.telefono, puesto:r.puesto, grupos:r.grupos });
+        }
+      });
+      Object.keys(MIS_ORIG).forEach(function(rn){ if(!vivos[rn]) eliminados.push(rn); });
+      return { editados:editados, eliminados:eliminados };
+    }
 
-    (estado.contactosPropios||[]).forEach(function(c){ nuevaFila(tb, c); });
-    if(!tb.children.length) nuevaFila(tb, {});
-    habilitarPegado(tb, nuevaFila);
-    tb.addEventListener('input', revisarPropios);
-    tb.addEventListener('paste', function(){ setTimeout(revisarPropios, 0); });
-    propiosInicial = JSON.stringify(leerPropios(tb)); revisarPropios();
+    function pintarFiltro(){
+      var box = cont.querySelector('#misFiltro'), set = {};
+      MIS.forEach(function(r){ (r.grupos||[]).forEach(function(t){ if(t) set[t]=true; }); });
+      var tags = Object.keys(set).sort();
+      if(!cargado || !tags.length){ box.hidden = true; box.innerHTML=''; return; }
+      box.hidden = false;
+      box.innerHTML = '<span class="flbl">Filtrar:</span>'+
+        '<span class="chip clic'+(filtro?'':' armed')+'" data-f="" style="--h:250">Todas</span>'+
+        tags.map(function(t){
+          return '<span class="chip clic'+(filtro&&filtro.toLowerCase()===t.toLowerCase()?' armed':'')+'" data-f="'+esc(t)+'" style="--h:'+hue(t)+'">'+esc(t)+'</span>';
+        }).join('');
+      Array.prototype.forEach.call(box.querySelectorAll('.chip.clic'), function(ch){
+        ch.onclick = function(){ filtro = ch.getAttribute('data-f') || null; pintarFiltro(); pintarTabla(); };
+      });
+    }
 
-    cont.querySelector('#bAdd').onclick = function(){ nuevaFila(tb, {}); revisarPropios(); };
-    cont.querySelector('#propiosSave').onclick = function(){
-      correr(this, cont.querySelector('#sPropios'), 'Guardando…',
-        function(r){ r.guardarPropios(leerPropios(tb)); },
-        function(res, st){ propiosInicial = JSON.stringify(leerPropios(tb)); revisarPropios();
-          setStatus(st, 'Guardado ('+res.length+'). Pulsa «Sincronizar» arriba para subirlos.', 'ok'); });
+    function celda(r,k){ return '<td><input data-k="'+k+'" value="'+esc(r[k]||'')+'"></td>'; }
+    function pintarTabla(){
+      var zona = cont.querySelector('#misZona');
+      if(!cargado){ zona.innerHTML = '<p class="muted">Pulsa «Traer mis contactos» para cargarlos.</p>'; return; }
+      if(!MIS.length){ zona.innerHTML = '<p class="muted">No tienes contactos.</p>'; return; }
+      var filtradas = filtro ? MIS.filter(function(r){ return (r.grupos||[]).some(function(g){ return g.toLowerCase()===filtro.toLowerCase(); }); }) : MIS;
+      if(!filtradas.length){ zona.innerHTML = '<p class="muted">Ningún contacto con la etiqueta «'+esc(filtro)+'».</p>'; return; }
+      zona.innerHTML = '<div class="tablewrap"><table class="rejilla mis"><thead><tr>'+
+        '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas</th><th></th></tr></thead><tbody>'+
+        filtradas.map(function(r){
+          return '<tr data-id="'+r.id+'">'+
+            celda(r,'nombre')+celda(r,'apellidos')+celda(r,'email')+celda(r,'telefono')+
+            '<td class="puesto-cell"><input data-k="puesto" class="chipinput" size="'+Math.max(3,(r.puesto||'').length)+'" style="--h:'+(r.puesto?hue(r.puesto):250)+'" value="'+esc(r.puesto||'')+'"></td>'+
+            '<td class="etqs"></td>'+
+            '<td class="act"><button class="btn danger sm icononly bdel" title="Eliminar">'+icon('borrar')+'</button></td>'+
+          '</tr>';
+        }).join('')+'</tbody></table></div>';
+      Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
+        var r = filaDe(tr.getAttribute('data-id')); if(!r) return;
+        Array.prototype.forEach.call(tr.querySelectorAll('input[data-k]'), function(inp){
+          var k = inp.getAttribute('data-k');
+          inp.oninput = function(){ r[k] = inp.value;
+            if(k==='puesto'){ inp.size = Math.max(3, inp.value.length); inp.style.setProperty('--h', inp.value?hue(inp.value):250); }
+            revisar(); };
+        });
+        tr.querySelector('.bdel').onclick = function(){ MIS = MIS.filter(function(x){ return x.id!==r.id; }); pintarFiltro(); pintarTabla(); revisar(); };
+        chipCellEditor(tr.querySelector('.etqs'), r.grupos, function(){ pintarFiltro(); revisar(); });
+      });
+    }
+
+    cont.querySelector('#bTraer').onclick = function(){
+      correr(this, sMis, 'Cargando tus contactos…',
+        function(r){ r.getMisContactos(); },
+        function(lista, st){
+          MIS = (lista||[]).map(norm);
+          MIS_ORIG = {}; MIS.forEach(function(r){ MIS_ORIG[r.resourceName] = snap(r); });
+          cargado = true; filtro = null;
+          pintarFiltro(); pintarTabla(); revisar();
+          setStatus(st, (lista||[]).length+' contactos. Edita o elimina y pulsa «Guardar cambios».', 'ok');
+        });
     };
 
-    // Importar (pegado inteligente) — en un modal
+    /* ===================== Contactos propios ===================== */
+    tb = cont.querySelector('#tPropios tbody');
+    (estado.contactosPropios||[]).forEach(function(c){ filaPropio(tb, c, revisar); });
+    if(!tb.children.length) filaPropio(tb, {}, revisar);
+    habilitarPegado(tb, function(t,o){ filaPropio(t, o, revisar); });
+    tb.addEventListener('input', revisar);
+    tb.addEventListener('paste', function(){ setTimeout(revisar, 0); });
+    propiosInicial = JSON.stringify(leerPropios(tb));
+
+    cont.querySelector('#bAdd').onclick = function(){ filaPropio(tb, {}, revisar); revisar(); };
     cont.querySelector('#bImport').onclick = function(){
       modalPegar({
         titulo: 'Importar contactos',
-        desc: 'Pega un listado (columnas separadas por tabulador). Detecta el correo, el nombre («Apellidos, Nombre») y el puesto. Se añaden a tu tabla; luego pulsa «Guardar mis contactos».',
+        desc: 'Pega un listado (columnas separadas por tabulador). Detecta el correo, el nombre («Apellidos, Nombre») y el puesto. Se añaden a tu tabla; luego pulsa «Guardar cambios».',
         placeholder: 'Apellidos, Nombre\tcorreo@…\tPuesto',
         aceptar: 'Añadir a la tabla',
         onAceptar: function(texto, ctx){
@@ -80,58 +161,89 @@ window.TABS.misContactos = {
           google.script.run
             .withSuccessHandler(function(lista){
               if(tb.children.length===1){ var v=leerPropios(tb); if(!v.length) tb.innerHTML=''; }
-              (lista||[]).forEach(function(c){ nuevaFila(tb, c); });
-              revisarPropios();
-              ctx.cerrar();
-              setStatus(cont.querySelector('#sPropios'), 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar mis contactos».', 'ok');
+              (lista||[]).forEach(function(c){ filaPropio(tb, c, revisar); });
+              revisar(); ctx.cerrar();
+              setStatus(sPropios, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar cambios».', 'ok');
             })
             .withFailureHandler(function(e){ ctx.btn.disabled=false; setStatus(ctx.st, mensajeError(e), 'err'); })
             .parsearPegado(texto);
         }
       });
     };
+
+    function propiosSucio(){ return propiosInicial!==null && JSON.stringify(leerPropios(tb))!==propiosInicial; }
+
+    /* ===================== Guardado unificado ===================== */
+    function revisar(){
+      var b = cont.querySelector('#misSave'); if(!b) return;
+      var g = cambiosGoogle();
+      b.hidden = !(g.editados.length || g.eliminados.length || propiosSucio());
+    }
+
+    cont.querySelector('#misSave').onclick = function(){
+      var btn = this, g = cambiosGoogle(), prop = propiosSucio();
+      if(!g.editados.length && !g.eliminados.length && !prop) return;
+      if(g.editados.length || g.eliminados.length){
+        var msg = 'Se aplicarán cambios a tus contactos de Google:\n';
+        if(g.editados.length)   msg += '· '+g.editados.length+' editado(s)\n';
+        if(g.eliminados.length) msg += '· '+g.eliminados.length+' eliminado(s)\n';
+        msg += '\n¿Continuar?';
+        if(!confirm(msg)) return;
+      }
+      btn.disabled = true; setStatus(sMis, 'Guardando…', 'busy');
+
+      function guardarGoogle(){
+        var c = cambiosGoogle();
+        if(!c.editados.length && !c.eliminados.length){ btn.disabled=false; revisar(); return; }
+        google.script.run
+          .withSuccessHandler(function(res){
+            MIS = (res.lista||[]).map(norm);
+            MIS_ORIG = {}; MIS.forEach(function(r){ MIS_ORIG[r.resourceName] = snap(r); });
+            pintarFiltro(); pintarTabla();
+            var rs = res.resumen || {};
+            setStatus(sMis, 'Guardado en Google: '+(rs.actualizados||0)+' editados, '+(rs.eliminados||0)+' eliminados'+(rs.errores?', '+rs.errores+' con error':'')+'.', rs.errores?'err':'ok');
+            btn.disabled=false; revisar();
+          })
+          .withFailureHandler(function(e){ setStatus(sMis, mensajeError(e), 'err'); btn.disabled=false; revisar(); })
+          .guardarMisContactos(c);
+      }
+
+      if(prop){
+        google.script.run
+          .withSuccessHandler(function(){ propiosInicial = JSON.stringify(leerPropios(tb)); setStatus(sPropios, 'Contactos propios guardados.', 'ok'); guardarGoogle(); })
+          .withFailureHandler(function(e){ setStatus(sPropios, mensajeError(e), 'err'); btn.disabled=false; revisar(); })
+          .guardarPropios(leerPropios(tb));
+      } else {
+        guardarGoogle();
+      }
+    };
   }
 };
 
+/** Construye una fila editable de contacto propio (con etiquetas como chips). */
 function filaPropio(tb, c, onChange){
-  var tr=document.createElement('tr'), ks=['nombre','apellidos','email','telefono','puesto','grupos'];
-  tr.innerHTML = ks.map(function(k){
-    var v = k==='grupos'?(c.grupos||[]).join(', '):(c[k]||'');
-    return '<td><input data-k="'+k+'" value="'+esc(v)+'"></td>';
-  }).join('')+'<td class="act"><button class="btn danger sm icononly" title="Quitar fila">'+icon('borrar')+'</button></td>';
-  tr.querySelector('button').onclick=function(){ tr.remove(); if(onChange) onChange(); };
+  var tr = document.createElement('tr');
+  tr._grupos = (c.grupos||[]).slice();
+  var pv = c.puesto || '';
+  tr.innerHTML =
+    '<td><input data-k="nombre" value="'+esc(c.nombre||'')+'"></td>'+
+    '<td><input data-k="apellidos" value="'+esc(c.apellidos||'')+'"></td>'+
+    '<td><input data-k="email" value="'+esc(c.email||'')+'"></td>'+
+    '<td><input data-k="telefono" value="'+esc(c.telefono||'')+'"></td>'+
+    '<td class="puesto-cell"><input data-k="puesto" class="chipinput" size="'+Math.max(3,pv.length)+'" style="--h:'+(pv?hue(pv):250)+'" value="'+esc(pv)+'"></td>'+
+    '<td class="etqs"></td>'+
+    '<td class="act"><button class="btn danger sm icononly" title="Quitar fila">'+icon('borrar')+'</button></td>';
+  var puestoInp = tr.querySelector('input[data-k="puesto"]');
+  puestoInp.oninput = function(){ puestoInp.size = Math.max(3, puestoInp.value.length); puestoInp.style.setProperty('--h', puestoInp.value?hue(puestoInp.value):250); if(onChange) onChange(); };
+  tr.querySelector('.act button').onclick = function(){ tr.remove(); if(onChange) onChange(); };
+  chipCellEditor(tr.querySelector('.etqs'), tr._grupos, onChange);
   tb.appendChild(tr);
 }
 function leerPropios(tb){
   return Array.prototype.map.call(tb.querySelectorAll('tr'), function(tr){
-    var o={tipoEmail:'Trabajo'};
-    Array.prototype.forEach.call(tr.querySelectorAll('input'), function(i){
-      var k=i.getAttribute('data-k');
-      if(k==='grupos') o.grupos=i.value.split(',').map(function(s){return s.trim();}).filter(Boolean);
-      else o[k]=i.value.trim();
-    });
+    var o = { tipoEmail:'Trabajo', grupos:(tr._grupos||[]).slice() };
+    Array.prototype.forEach.call(tr.querySelectorAll('input[data-k]'), function(i){ o[i.getAttribute('data-k')] = i.value.trim(); });
     return o;
   }).filter(function(o){ return o.email||o.nombre; });
-}
-function pintarMis(cont, lista){
-  var box=cont.querySelector('#tablaMis');
-  if(!lista.length){ box.innerHTML='<p class="muted">No hay contactos.</p>'; return; }
-  box.innerHTML='<div class="tablewrap" style="margin-top:14px"><table><thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Organización / DPTO</th><th>Etiquetas</th><th></th></tr></thead><tbody>'+
-    lista.map(function(c){
-      var puesto = c.puesto ? '<span class="chip" style="--h:'+hue(c.puesto)+'">'+esc(c.puesto)+'</span>' : '<span class="muted">—</span>';
-      var etqs = (c.grupos&&c.grupos.length) ? '<div class="etq-cell">'+chipsHTML(c.grupos)+'</div>' : '<span class="muted">—</span>';
-      return '<tr><td>'+esc(c.nombre)+'</td><td>'+esc(c.apellidos)+'</td><td>'+esc(c.email)+'</td><td>'+
-        esc(c.telefono||'')+'</td><td>'+puesto+'</td><td>'+etqs+
-        '</td><td><button class="btn danger sm icononly" data-rn="'+esc(c.resourceName)+'" title="Eliminar">'+icon('borrar')+'</button></td></tr>';
-    }).join('')+'</tbody></table></div>';
-  Array.prototype.forEach.call(box.querySelectorAll('button[data-rn]'), function(b){
-    b.onclick=function(){
-      if(!confirm('¿Eliminar este contacto de tu Google Contacts?')) return;
-      b.disabled=true;
-      google.script.run.withSuccessHandler(function(){ b.closest('tr').remove(); })
-        .withFailureHandler(function(e){ b.disabled=false; alert(mensajeError(e)); })
-        .eliminarContacto(b.getAttribute('data-rn'));
-    };
-  });
 }
 </script>

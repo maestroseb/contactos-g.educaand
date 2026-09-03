@@ -3,11 +3,37 @@
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 /** Hue estable (0-359) a partir de una cadena (para colorear chips de etiqueta). */
 function hue(s){ var h=0; s=String(s); for(var i=0;i<s.length;i++) h=(h*31 + s.charCodeAt(i))>>>0; return h%360; }
-/** Devuelve una lista de valores como chips de color. */
-function chipsHTML(lista){
-  return (lista||[]).filter(Boolean).map(function(t){
-    return '<span class="chip" style="--h:'+hue(t)+'">'+esc(t)+'</span>';
-  }).join(' ');
+/** SVG de la «x» de un chip. */
+function cerrarSvg(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'; }
+
+/**
+ * Editor de etiquetas dentro de una celda: chips con «x» para quitar y un «+»
+ * para añadir (escribe y Enter). Muta el array `grupos` en el sitio y avisa por
+ * onChange en cada cambio.
+ */
+function chipCellEditor(td, grupos, onChange){
+  function existe(t){ return grupos.map(function(g){return g.toLowerCase();}).indexOf(t.toLowerCase()) !== -1; }
+  function render(){
+    td.innerHTML = '<div class="etq-cell">'+
+      grupos.map(function(t){ return '<span class="chip" style="--h:'+hue(t)+'">'+esc(t)+'<span class="x" data-x="'+esc(t)+'">'+cerrarSvg()+'</span></span>'; }).join('')+
+      '<button type="button" class="chipadd" title="Añadir etiqueta">'+icon('add')+'</button></div>';
+    Array.prototype.forEach.call(td.querySelectorAll('.chip .x'), function(x){
+      x.onclick = function(e){ e.stopPropagation(); var t=x.getAttribute('data-x'); var i=grupos.map(function(g){return g.toLowerCase();}).indexOf(t.toLowerCase());
+        if(i>=0){ grupos.splice(i,1); render(); if(onChange) onChange(); } };
+    });
+    td.querySelector('.chipadd').onclick = abrir;
+  }
+  function abrir(){
+    var box = td.querySelector('.etq-cell'), add = box.querySelector('.chipadd');
+    var inp = document.createElement('input'); inp.className='chip-new'; inp.placeholder='Etiqueta…';
+    box.insertBefore(inp, add); inp.focus();
+    var done=false;
+    function commit(){ if(done) return; done=true; var v=inp.value.trim();
+      if(v && !existe(v)){ grupos.push(v); } render(); if(onChange) onChange(); }
+    inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); commit(); } else if(e.key==='Escape'){ done=true; render(); } });
+    inp.addEventListener('blur', commit);
+  }
+  render();
 }
 function icon(name, cls){
   return '<svg class="ico'+(cls?' '+cls:'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+

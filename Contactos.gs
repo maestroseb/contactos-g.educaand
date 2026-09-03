@@ -233,6 +233,70 @@ function eliminarContacto(resourceName) {
   return true;
 }
 
+/**
+ * Aplica en bloque los cambios hechos en la rejilla de «Mis contactos de Google».
+ * Solo toca lo que realmente cambió (cada edición trae su propia máscara de
+ * campos) y borra en lote. Trabaja SIEMPRE sobre los contactos del usuario que
+ * accede. Devuelve un resumen y la lista actualizada.
+ *
+ * @param {Object} payload
+ *   - editados: [{ resourceName, etag, mask, nombre, apellidos, email, telefono, puesto, grupos[] }]
+ *   - eliminados: [resourceName]
+ */
+function guardarMisContactos(payload) {
+  payload = payload || {};
+  const editados = payload.editados || [];
+  const eliminados = payload.eliminados || [];
+  const resumen = { actualizados: 0, eliminados: 0, errores: 0 };
+
+  // Resolver nombres de grupo -> resourceName (creando los que falten), solo si
+  // alguna edición toca las etiquetas.
+  const gruposExistentes = {};
+  if (editados.some(e => (e.mask || '').indexOf('memberships') !== -1)) {
+    (People.ContactGroups.list().contactGroups || []).forEach(g => { gruposExistentes[g.name] = g.resourceName; });
+  }
+  function membershipsDe(grupos) {
+    const arr = (grupos || []).filter(String).map(nombre => {
+      let id = gruposExistentes[nombre];
+      if (!id) {
+        id = conReintentos_(function () { return People.ContactGroups.create({ contactGroup: { name: nombre } }).resourceName; });
+        gruposExistentes[nombre] = id;
+      }
+      return { contactGroupMembership: { contactGroupResourceName: id } };
+    });
+    // Si se quedó sin etiquetas, al menos que siga en "Mis contactos".
+    return arr.length ? arr : [{ contactGroupMembership: { contactGroupResourceName: 'contactGroups/myContacts' } }];
+  }
+
+  // Actualizaciones: una por contacto, con la máscara exacta de lo que cambió
+  // (así nunca se pisan otros campos, p. ej. correos secundarios).
+  editados.forEach(function (e) {
+    if (!e.resourceName || !e.mask) return;
+    const persona = { resourceName: e.resourceName, etag: e.etag };
+    if (e.mask.indexOf('names') !== -1) persona.names = [{ givenName: e.nombre || '', familyName: e.apellidos || '' }];
+    if (e.mask.indexOf('emailAddresses') !== -1) persona.emailAddresses = e.email ? [{ value: e.email }] : [];
+    if (e.mask.indexOf('phoneNumbers') !== -1) persona.phoneNumbers = e.telefono ? [{ type: 'Movil', value: e.telefono }] : [];
+    if (e.mask.indexOf('organizations') !== -1) persona.organizations = e.puesto ? [{ name: e.puesto }] : [];
+    if (e.mask.indexOf('memberships') !== -1) persona.memberships = membershipsDe(e.grupos);
+    try {
+      conReintentos_(function () { People.People.updateContact(persona, e.resourceName, { updatePersonFields: e.mask }); }, 3);
+      resumen.actualizados++;
+    } catch (err) { resumen.errores++; Logger.log('guardarMisContactos update: ' + err.message); }
+  });
+
+  // Borrados en lote (con caída a uno-a-uno).
+  if (eliminados.length) {
+    const fall = ejecutarPorLotes_(eliminados, 200,
+      function (chunk) { People.People.batchDeleteContacts({ resourceNames: chunk }); },
+      function (rn) { People.People.deleteContact(rn); });
+    resumen.eliminados = eliminados.length - fall.length;
+    resumen.errores += fall.length;
+  }
+
+  try { eliminarGruposVacios_(); } catch (e2) { /* silencioso */ }
+  return { resumen: resumen, lista: getMisContactos() };
+}
+
 /* --------------------------- Utilidades --------------------------- */
 
 function obtenerTodosLosContactos_() {
