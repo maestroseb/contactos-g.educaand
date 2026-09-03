@@ -57,26 +57,25 @@ function include(nombre) {
 /** Estado inicial para pintar la interfaz. */
 function getEstadoInicial() {
   const email = correoUsuarioActual_();
+  const cfg = getConfig_() || {};   // una sola lectura (cacheada)
   return {
     email: email,
     esAdmin: esAdmin_(email),
-    configurado: estaConfigurado_(),
+    configurado: !!cfg.completo,
     nombreApp: PARAMS.nombreApp,
     icono: PARAMS.icono,
     version: PARAMS.version,
-    nombreCentro: nombreCentro_(),
+    nombreCentro: (cfg.nombreCentro ? String(cfg.nombreCentro).trim() : ''),
     gruposCentro: gruposDelCentro_(),
     contactosPropios: leerContactosPropios_(),
     diariaActiva: tieneSincronizacionDiaria(),
-    etiquetasSugeridas: etiquetasSugeridas_(),
-    etiquetasCats: (getConfig_() && getConfig_().etiquetas) || {}
+    etiquetasSugeridas: etiquetasSugeridasDe_(cfg.etiquetas),
+    etiquetasCats: cfg.etiquetas || {}
   };
 }
 
 /** Etiquetas sugeridas (unión de las categorías configuradas) para autocompletar. */
-function etiquetasSugeridas_() {
-  const c = getConfig_();
-  const e = c && c.etiquetas;
+function etiquetasSugeridasDe_(e) {
   let lista = [];
   if (Array.isArray(e)) lista = e;
   else if (e && typeof e === 'object') Object.keys(e).forEach(k => { lista = lista.concat(e[k] || []); });

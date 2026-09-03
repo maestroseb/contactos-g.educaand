@@ -5,11 +5,25 @@
  */
 
 const CLAVE_OPCIONES_DIARIA_ = 'opcionesSincronizacionDiaria';
+const CACHE_DIARIA_ = 'diariaActiva_v1';
 
-/** ¿Tiene el usuario actual la sincronización diaria activada? */
+/** ¿Tiene el usuario actual la sincronización diaria activada? (con caché por usuario) */
 function tieneSincronizacionDiaria() {
-  return ScriptApp.getProjectTriggers()
+  let cache = null;
+  try { cache = CacheService.getUserCache(); } catch (e) {}
+  if (cache) {
+    const v = cache.get(CACHE_DIARIA_);
+    if (v !== null) return v === '1';
+  }
+  const activa = ScriptApp.getProjectTriggers()
     .some(t => t.getHandlerFunction() === 'ejecutarSincronizacionDiaria');
+  if (cache) { try { cache.put(CACHE_DIARIA_, activa ? '1' : '0', 21600); } catch (e) {} }
+  return activa;
+}
+
+/** Invalida la caché del estado del diario (tras activar/desactivar). */
+function invalidarCacheDiaria_() {
+  try { CacheService.getUserCache().remove(CACHE_DIARIA_); } catch (e) {}
 }
 
 /**
@@ -33,6 +47,7 @@ function activarSincronizacionDiaria(opciones) {
     .atHour(PARAMS.sincronizacionDiaria.hora)
     .create();
 
+  invalidarCacheDiaria_();
   return true;
 }
 
@@ -48,6 +63,7 @@ function desactivarSincronizacionDiaria_() {
       ScriptApp.deleteTrigger(t);
     }
   });
+  invalidarCacheDiaria_();
 }
 
 /**
