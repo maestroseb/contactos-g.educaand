@@ -103,7 +103,13 @@
 
   .page{flex:1; width:100%; max-width:1280px; margin:0 auto; padding:30px 32px 64px}
   /* Popover de selección de grupos */
-  .syncwrap{position:relative; display:inline-flex; gap:2px}
+  /* Botón partido: «Sincronizar» + desplegable como una sola pieza. */
+  .syncwrap{position:relative; display:inline-flex}
+  .syncwrap .btn{box-shadow:none}
+  .syncwrap .splitmain{border-top-right-radius:0; border-bottom-right-radius:0}
+  .syncwrap .splitcaret{border-top-left-radius:0; border-bottom-left-radius:0;
+    padding-left:9px; padding-right:9px; border-left:1px solid rgba(255,255,255,.32)}
+  .syncwrap .splitcaret .ico{width:15px; height:15px; margin:0}
   #hSyncMenu{padding:7px 8px}
   .syncpop{position:absolute; top:calc(100% + 8px); right:0; z-index:50; width:252px;
     background:var(--surface); border:1px solid var(--border); border-radius:var(--r); box-shadow:var(--sh-lg); padding:12px}

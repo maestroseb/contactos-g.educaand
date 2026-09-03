@@ -13,11 +13,12 @@ window.TABS.contactosCentro = {
     var seq = 0;
     var cats = estado.etiquetasCats || {};
     var pintando = false, accionPintar = true, pintadas = {};  // arrastre para pintar
+    var lastPX = 0, lastPY = 0, rafScroll = null;              // auto-scroll al pintar
 
     cont.innerHTML = [
       '<div class="card">',
         '<h2>'+icon('claustro')+'Claustro'+(estado.nombreCentro?' de '+esc(estado.nombreCentro):'')+'</h2>',
-        '<p class="desc">Elige una etiqueta abajo y <b>pincha (o arrastra arriba/abajo) sobre las personas</b> para asignársela; vuelve a pinchar para quitarla. También puedes marcar filas y aplicarla en bloque.</p>',
+        '<p class="desc">Elige una etiqueta abajo y <b>pincha (o arrastra arriba/abajo) sobre las personas</b> para asignársela; vuelve a pinchar para quitarla. También puedes marcar filas y aplicarla en bloque. <b>Doble clic</b> en una etiqueta para <b>renombrarla</b> en todo el claustro.</p>',
         '<div class="palette" id="paleta"></div>',
         '<div id="gridZona"><p class="muted">Cargando claustro…</p></div>',
         '<div class="row" style="margin-top:14px">',
@@ -106,6 +107,8 @@ window.TABS.contactosCentro = {
 
       Array.prototype.forEach.call(pal.querySelectorAll('.chip.clic'), function(ch){
         ch.onclick = function(){ armar(ch.getAttribute('data-tag')); };
+        ch.ondblclick = function(e){ e.stopPropagation(); iniciarRenombrar(ch); };
+        ch.title = 'Clic: asignar · Doble clic: renombrar';
       });
       pal.querySelector('#bArmLibre').onclick = function(){
         var v = pal.querySelector('#etqLibre').value.trim(); if(v) armar(v);
@@ -143,6 +146,73 @@ window.TABS.contactosCentro = {
       if(!SEL.size){ setStatus(cont.querySelector('#sAdmin'), 'Marca antes alguna fila.', 'err'); return; }
       FILAS.forEach(function(f){ if(SEL.has(f.id)) toggleTag(f, armado, add); });
       renderGrid();
+    }
+
+    /* ---------- renombrar etiqueta (cascada a las personas) ---------- */
+    function iniciarRenombrar(chipEl){
+      var old = chipEl.getAttribute('data-tag');
+      var inp = document.createElement('input');
+      inp.value = old; inp.setAttribute('aria-label', 'Nuevo nombre de la etiqueta');
+      inp.style.cssText = 'font:inherit; padding:2px 10px; border:1px solid var(--primary); border-radius:999px; min-width:110px';
+      chipEl.parentNode.insertBefore(inp, chipEl);
+      chipEl.style.display = 'none';
+      inp.focus(); inp.select();
+      var hecho = false;
+      function commit(){
+        if(hecho) return; hecho = true;
+        var nv = inp.value.trim();
+        if(!nv || nv.toLowerCase() === old.toLowerCase()){ pintarPaleta(); refrescarArmado(); return; }
+        aplicarRenombrado(old, nv);
+      }
+      function cancelar(){ if(hecho) return; hecho = true; pintarPaleta(); refrescarArmado(); }
+      inp.addEventListener('keydown', function(e){
+        if(e.key === 'Enter'){ e.preventDefault(); commit(); }
+        else if(e.key === 'Escape'){ e.preventDefault(); cancelar(); }
+      });
+      inp.addEventListener('blur', commit);
+    }
+
+    function tieneEn_(arr, tag){
+      var tl = tag.toLowerCase();
+      for(var i=0;i<arr.length;i++){ if(String(arr[i]).toLowerCase() === tl) return true; }
+      return false;
+    }
+
+    function aplicarRenombrado(old, nueva){
+      var oldL = old.toLowerCase(), n = 0;
+      // 1) Cascada a las personas.
+      FILAS.forEach(function(f){
+        var g = f.grupos || [], out = [], hit = false;
+        g.forEach(function(t){
+          if(t.toLowerCase() === oldL){ hit = true; if(!tieneEn_(out, nueva)) out.push(nueva); }
+          else if(!tieneEn_(out, t)) out.push(t);
+        });
+        if(hit) n++;
+        f.grupos = out;
+      });
+      // 2) Renombra también la sugerencia en las categorías de Configuración.
+      var cambioCfg = false;
+      Object.keys(cats).forEach(function(k){
+        var arr = cats[k]; if(!Array.isArray(arr)) return;
+        for(var i=0;i<arr.length;i++){ if(String(arr[i]).toLowerCase() === oldL){ arr[i] = nueva; cambioCfg = true; } }
+      });
+      if(armado && armado.toLowerCase() === oldL) armado = nueva;
+      pintarPaleta(); renderGrid();
+      setStatus(cont.querySelector('#sAdmin'),
+        'Etiqueta renombrada'+(n ? ' en '+n+' persona'+(n===1?'':'s') : '')+'. Pulsa «Guardar claustro» para guardarlo.', 'ok');
+      // 3) Persiste la sugerencia (las personas se guardan con «Guardar claustro»).
+      if(cambioCfg){
+        google.script.run
+          .withSuccessHandler(function(res){
+            ESTADO.etiquetasCats = res.etiquetas;
+            ESTADO.etiquetasSugeridas = [].concat(res.etiquetas.grupo||[], res.etiquetas.departamentos||[], res.etiquetas.cargos||[], res.etiquetas.otros||[]);
+            if(typeof invalidarTab==='function') invalidarTab('configuracion');  // refresca sus textareas
+          })
+          .withFailureHandler(function(e){
+            setStatus(cont.querySelector('#sAdmin'), 'Renombrada en la lista, pero la sugerencia de Configuración no se pudo actualizar: '+mensajeError(e), 'err');
+          })
+          .guardarConfiguracion({ etiquetas: cats });
+      }
     }
 
     /* ---------- rejilla ---------- */
@@ -189,19 +259,46 @@ window.TABS.contactosCentro = {
           var f = filaId(tr.getAttribute('data-id')); if(!f) return;
           accionPintar = !tieneTag(f, armado);   // según la 1ª: si no la tiene, pintamos (añadir); si la tiene, borramos
           pintando = true; pintadas = {};
+          lastPX = e.clientX; lastPY = e.clientY;
           document.body.style.userSelect = 'none';
+          iniciarAutoScroll();
           aplicarPintura(tr, f);
         });
       });
     }
 
-    function onPaintMove(e){
-      if(!pintando) return;
-      var el = document.elementFromPoint(e.clientX, e.clientY);
+    function pintarEn(x, y){
+      var el = document.elementFromPoint(x, y);
       var tr = el && el.closest ? el.closest('tr[data-id]') : null;
       if(tr && zona.contains(tr)){ var f = filaId(tr.getAttribute('data-id')); if(f) aplicarPintura(tr, f); }
     }
-    function finPintura(){ if(pintando){ pintando=false; document.body.style.userSelect=''; if(document.contains(zona)) renderGrid(); } }
+    function onPaintMove(e){
+      if(!pintando) return;
+      lastPX = e.clientX; lastPY = e.clientY;
+      pintarEn(lastPX, lastPY);
+    }
+    // Mientras se pinta, si el puntero está cerca del borde superior/inferior,
+    // la página se desplaza sola para seguir asignando hacia abajo (o arriba).
+    function autoScrollTick(){
+      if(!pintando){ rafScroll = null; return; }
+      var vh = window.innerHeight, EDGE = 80, MAXV = 26;
+      var topEl = document.querySelector('.topfixed');
+      var topGuard = topEl ? topEl.getBoundingClientRect().height : 0;
+      var dy = 0;
+      if(lastPY > vh - EDGE) dy = Math.min(MAXV, (lastPY - (vh - EDGE)) / EDGE * MAXV);
+      else if(lastPY < topGuard + EDGE) dy = -Math.min(MAXV, ((topGuard + EDGE) - lastPY) / EDGE * MAXV);
+      if(dy){
+        var antes = window.pageYOffset;
+        window.scrollBy(0, dy);
+        if(window.pageYOffset !== antes) pintarEn(lastPX, lastPY);  // pinta lo que entra bajo el puntero
+      }
+      rafScroll = requestAnimationFrame(autoScrollTick);
+    }
+    function iniciarAutoScroll(){ if(rafScroll == null) rafScroll = requestAnimationFrame(autoScrollTick); }
+    function finPintura(){
+      if(pintando){ pintando=false; document.body.style.userSelect=''; if(document.contains(zona)) renderGrid(); }
+      if(rafScroll != null){ cancelAnimationFrame(rafScroll); rafScroll = null; }
+    }
     document.addEventListener('pointermove', onPaintMove);
     document.addEventListener('pointerup', finPintura);
     document.addEventListener('pointercancel', finPintura);
