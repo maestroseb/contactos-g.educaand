@@ -1,6 +1,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root{
     --bg:#f7f8fb; --surface:#ffffff; --surface-2:#f4f5f8; --surface-3:#ecedf3;
@@ -16,6 +16,7 @@
     --sh-lg:0 6px 16px rgba(16,24,40,.08), 0 24px 48px rgba(16,24,40,.10);
     --r-sm:9px; --r:13px; --r-lg:18px; --r-pill:999px;
     --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --narrow:"Archivo Narrow","Roboto Condensed","Segoe UI Semibold",var(--sans);
     --head:"Bricolage Grotesque",var(--sans);
     --mono:"JetBrains Mono",ui-monospace,monospace;
   }
@@ -137,8 +138,8 @@
   }
 
   /* Chips de etiqueta con color por hue */
-  .chip{--h:250; display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:600; line-height:1.6;
-    padding:2px 5px 2px 9px; border-radius:999px; white-space:nowrap;
+  .chip{--h:250; display:inline-flex; align-items:center; gap:4px; font-family:var(--narrow); font-size:12.5px; font-weight:600; line-height:1.6;
+    padding:2px 5px 2px 8px; border-radius:999px; white-space:nowrap; letter-spacing:.1px;
     background:color-mix(in srgb, hsl(var(--h) 65% 55%) 15%, var(--surface));
     color:color-mix(in srgb, hsl(var(--h) 62% 40%) 90%, var(--ink));
     border:1px solid color-mix(in srgb, hsl(var(--h) 60% 55%) 32%, transparent)}
@@ -276,8 +277,8 @@
 
   /* Claustro: columnas ajustadas al contenido (no estiradas), casilla muy estrecha. */
   table.rejilla.claustro{min-width:0; width:auto}
-  table.rejilla.claustro th.sel-col, table.rejilla.claustro td.sel-col{width:30px}
-  table.rejilla.claustro .sel, table.rejilla.claustro .selall{width:15px; height:15px}
+  table.rejilla.claustro th.sel-col, table.rejilla.claustro td.sel-col{width:22px; padding:0}
+  table.rejilla.claustro .sel, table.rejilla.claustro .selall{width:14px; height:14px}
   table.rejilla.claustro td input{min-width:92px}
   table.rejilla.claustro td:nth-child(4) input{min-width:158px}  /* E-mail */
   table.rejilla.claustro td:nth-child(5) input{min-width:98px}   /* Teléfono */
