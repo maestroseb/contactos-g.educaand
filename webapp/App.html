@@ -122,7 +122,14 @@ function lanzarSincronizacion(btn, st, opciones, onDone){
 
 /* ===================== Arranque ===================== */
 window.TABS = window.TABS || {};
-var ESTADO = null, TAB_ACTIVA = null;
+var ESTADO = null, TAB_ACTIVA = null, PANELS = {};
+
+/** Fuerza que una pestaña se vuelva a construir la próxima vez que se abra
+ *  (p. ej. tras cambiar la configuración, para refrescar «Contactos del centro»). */
+function invalidarTab(key){
+  var p = PANELS[key];
+  if(p){ if(p.parentNode) p.parentNode.removeChild(p); delete PANELS[key]; }
+}
 
 document.addEventListener('DOMContentLoaded', function(){ recargarApp(); });
 
@@ -152,6 +159,7 @@ function tabsOrdenadas(estado){
 }
 
 function construirShell(estado, preferida){
+  PANELS = {};   // el shell se reconstruye: descartamos los paneles anteriores
   var tabs = tabsOrdenadas(estado);
   var inicial = estado.email ? estado.email.trim().charAt(0).toUpperCase() : '?';
   var necesitaConfig = estado.esAdmin && !estado.configurado;
@@ -251,12 +259,24 @@ function irATab(key){
   });
   document.getElementById('tb-tit').textContent = t.titulo || t.label;
   document.getElementById('tb-sub').textContent = t.sub || '';
+
   var cont = document.getElementById('content');
-  cont.innerHTML = '';
-  try { t.render(cont, ESTADO); }
-  catch(err){
-    cont.innerHTML = '<div class="card"><p class="status err">'+icon('alerta')+
-      '<span>Error al mostrar esta sección: '+esc(err&&err.message?err.message:err)+'</span></p></div>';
+  // Oculta todos los paneles ya montados.
+  Array.prototype.forEach.call(cont.children, function(p){ p.hidden = true; });
+
+  // Si esta pestaña ya se cargó, solo se muestra (instantáneo, conserva su estado).
+  var panel = PANELS[key];
+  if(!panel){
+    panel = document.createElement('div');
+    panel.className = 'tabpanel';
+    cont.appendChild(panel);
+    PANELS[key] = panel;
+    try { t.render(panel, ESTADO); }
+    catch(err){
+      panel.innerHTML = '<div class="card"><p class="status err">'+icon('alerta')+
+        '<span>Error al mostrar esta sección: '+esc(err&&err.message?err.message:err)+'</span></p></div>';
+    }
   }
+  panel.hidden = false;
 }
 </script>

@@ -167,6 +167,7 @@ function pintar(cont, estado, s){
         ESTADO.nombreCentro = res.nombreCentro;
         ESTADO.etiquetasCats = res.etiquetas;
         ESTADO.etiquetasSugeridas = [].concat(res.etiquetas.grupo||[], res.etiquetas.departamentos||[], res.etiquetas.cargos||[], res.etiquetas.otros||[]);
+        if(typeof invalidarTab==='function') invalidarTab('contactosCentro');  // refresca la paleta al reabrir
         var b=document.querySelector('.brand b'); if(b) b.textContent = res.nombreCentro || ESTADO.nombreApp;
         floatBtn.disabled=false; floatBtn.hidden=true; floatBtn.innerHTML=icon('ok')+'Guardado';
         setTimeout(function(){ floatBtn.innerHTML=icon('guardar')+'Guardar configuración'; }, 1500);
