@@ -24,18 +24,10 @@ window.TABS.misContactos = {
         '</tr></thead><tbody></tbody></table></div>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir fila</button>',
-          '<button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar mis contactos</button>',
+          '<button class="btn" id="bImport">'+icon('importar')+'Importar (pegar)…</button>',
+          '<button class="btn primary" id="bGuardar" style="margin-left:auto">'+icon('guardar')+'Guardar mis contactos</button>',
         '</div>',
         '<p class="status" id="sPropios"></p>',
-      '</div>',
-
-      // Importación inteligente para propios
-      '<div class="card">',
-        '<h2>'+icon('importar')+'Importar contactos (pegar)</h2>',
-        '<p class="desc">Pega un listado (columnas separadas por tabulador). Detecta solo el correo, el nombre («Apellidos, Nombre») y el puesto. Se añaden a tu tabla de arriba; luego pulsa «Guardar mis contactos».</p>',
-        '<textarea id="pegado" rows="4" style="font-family:var(--mono);font-size:12.5px"></textarea>',
-        '<div class="row" style="margin-top:12px"><button class="btn" id="bImport">'+icon('importar')+'Añadir a la tabla</button></div>',
-        '<p class="status" id="sImport"></p>',
       '</div>'
     ].join('');
 
@@ -58,19 +50,27 @@ window.TABS.misContactos = {
         function(res, st){ setStatus(st, 'Guardado ('+res.length+'). Pulsa «Sincronizar» arriba para subirlos.', 'ok'); });
     };
 
-    // Importar (pegado inteligente)
+    // Importar (pegado inteligente) — en un modal
     cont.querySelector('#bImport').onclick = function(){
-      var texto = cont.querySelector('#pegado').value, st = cont.querySelector('#sImport');
-      if(!texto.trim()){ setStatus(st, 'Pega antes las filas.', 'err'); return; }
-      correr(this, st, 'Procesando…',
-        function(r){ r.parsearPegado(texto); },
-        function(lista, st){
-          // si solo hay una fila vacía, la quitamos
-          if(tb.children.length===1){ var v=leerPropios(tb); if(!v.length) tb.innerHTML=''; }
-          (lista||[]).forEach(function(c){ filaPropio(tb, c); });
-          cont.querySelector('#pegado').value='';
-          setStatus(st, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar mis contactos».', 'ok');
-        });
+      modalPegar({
+        titulo: 'Importar contactos',
+        desc: 'Pega un listado (columnas separadas por tabulador). Detecta el correo, el nombre («Apellidos, Nombre») y el puesto. Se añaden a tu tabla; luego pulsa «Guardar mis contactos».',
+        placeholder: 'Apellidos, Nombre\tcorreo@…\tPuesto',
+        aceptar: 'Añadir a la tabla',
+        onAceptar: function(texto, ctx){
+          if(!texto.trim()){ setStatus(ctx.st, 'Pega antes las filas.', 'err'); return; }
+          ctx.btn.disabled = true; setStatus(ctx.st, 'Procesando…', 'busy');
+          google.script.run
+            .withSuccessHandler(function(lista){
+              if(tb.children.length===1){ var v=leerPropios(tb); if(!v.length) tb.innerHTML=''; }
+              (lista||[]).forEach(function(c){ filaPropio(tb, c); });
+              ctx.cerrar();
+              setStatus(cont.querySelector('#sPropios'), 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar mis contactos».', 'ok');
+            })
+            .withFailureHandler(function(e){ ctx.btn.disabled=false; setStatus(ctx.st, mensajeError(e), 'err'); })
+            .parsearPegado(texto);
+        }
+      });
     };
   }
 };

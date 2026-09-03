@@ -22,18 +22,11 @@ window.TABS.contactosCentro = {
         '<div id="gridZona"><p class="muted">Cargando claustro…</p></div>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir persona</button>',
+          '<button class="btn" id="bImport">'+icon('importar')+'Importar desde Séneca…</button>',
           '<button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar claustro</button>',
           '<button class="btn danger" id="bVaciar" style="margin-left:auto">'+icon('borrar')+'Vaciar lista</button>',
         '</div>',
         '<p class="status" id="sAdmin"></p>',
-      '</div>',
-
-      '<div class="card">',
-        '<h2>'+icon('importar')+'Importar desde Séneca</h2>',
-        '<p class="desc">Pega tu listado (columnas por tabulador). Detecta correo, nombre y puesto. Se añade a la lista; luego pulsa «Guardar claustro».</p>',
-        '<textarea id="pegado" rows="4" style="font-family:var(--mono);font-size:12.5px"></textarea>',
-        '<div class="row" style="margin-top:12px"><button class="btn" id="bImport">'+icon('importar')+'Añadir a la lista</button></div>',
-        '<p class="status" id="sImport"></p>',
       '</div>'
     ].join('');
 
@@ -63,16 +56,26 @@ window.TABS.contactosCentro = {
         function(n, st){ FILAS=[filaVacia()]; SEL.clear(); pintarPaleta(); renderGrid(); setStatus(st, 'Lista del claustro vaciada.', 'ok'); });
     };
     cont.querySelector('#bImport').onclick = function(){
-      var texto = cont.querySelector('#pegado').value, st = cont.querySelector('#sImport');
-      if(!texto.trim()){ setStatus(st, 'Pega antes las filas.', 'err'); return; }
-      correr(this, st, 'Procesando…',
-        function(r){ r.adminImportarPegado(texto); },
-        function(lista, st){
-          if(FILAS.length===1 && !FILAS[0].email && !FILAS[0].nombre) FILAS=[];
-          (lista||[]).forEach(function(c){ FILAS.push(normaliza(c)); });
-          cont.querySelector('#pegado').value=''; pintarPaleta(); renderGrid();
-          setStatus(st, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar claustro».', 'ok');
-        });
+      modalPegar({
+        titulo: 'Importar desde Séneca',
+        desc: 'Pega tu listado (columnas por tabulador). Detecta correo, nombre y puesto. Se añade a la lista; luego pulsa «Guardar claustro».',
+        placeholder: 'Apellidos, Nombre\tcorreo@…\tPuesto',
+        aceptar: 'Añadir a la lista',
+        onAceptar: function(texto, ctx){
+          if(!texto.trim()){ setStatus(ctx.st, 'Pega antes las filas.', 'err'); return; }
+          ctx.btn.disabled = true; setStatus(ctx.st, 'Procesando…', 'busy');
+          google.script.run
+            .withSuccessHandler(function(lista){
+              if(FILAS.length===1 && !FILAS[0].email && !FILAS[0].nombre) FILAS=[];
+              (lista||[]).forEach(function(c){ FILAS.push(normaliza(c)); });
+              pintarPaleta(); renderGrid();
+              ctx.cerrar();
+              setStatus(cont.querySelector('#sAdmin'), 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar claustro».', 'ok');
+            })
+            .withFailureHandler(function(e){ ctx.btn.disabled=false; setStatus(ctx.st, mensajeError(e), 'err'); })
+            .adminImportarPegado(texto);
+        }
+      });
     };
 
     /* ---------- paleta ---------- */

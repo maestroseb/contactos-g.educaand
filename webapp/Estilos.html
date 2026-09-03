@@ -113,8 +113,10 @@
   .syncpop input{accent-color:var(--primary); cursor:pointer}
   .syncpop-prop{border-top:1px solid var(--border); padding-top:8px; margin-top:2px}
   /* Configuración: cajas estrechas en fila con scroll horizontal */
-  .cfg-cols{display:flex; gap:14px; overflow-x:auto; padding-bottom:8px}
-  .cfg-col{flex:0 0 172px; min-width:172px; display:flex; flex-direction:column}
+  /* 172px = ancho mínimo; por encima, las cajas se reparten equidistantes el
+     ancho disponible y solo se apilan cuando no caben a ese mínimo. */
+  .cfg-cols{display:grid; grid-template-columns:repeat(auto-fit,minmax(172px,1fr)); gap:14px}
+  .cfg-col{display:flex; flex-direction:column; min-width:0}
   .cfg-col > span{font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px}
   .cfg-col textarea{width:100%}
   /* Botón Guardar flotante */
@@ -153,6 +155,24 @@
   .pagehead h1{font-size:26px; font-weight:800; letter-spacing:-.02em}
   .pagehead .sub{color:var(--ink-soft); font-size:14.5px; margin-top:5px}
   .content{display:flex; flex-direction:column; gap:20px}
+  .tabpanel{display:flex; flex-direction:column; gap:20px}
+
+  /* Centro + Administradores en paralelo (se apilan si no caben). */
+  .cfg-top{display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:20px; align-items:start}
+
+  /* ---------- Modal ---------- */
+  .modal-ov{position:fixed; inset:0; background:rgba(15,17,26,.5); display:flex; align-items:flex-start;
+    justify-content:center; padding:8vh 16px 16px; z-index:80}
+  .modal{background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg);
+    box-shadow:var(--sh-lg); width:min(620px,100%); padding:22px 24px; display:flex; flex-direction:column;
+    animation:modalin .16s ease}
+  @keyframes modalin{from{opacity:0; transform:translateY(-8px)} to{opacity:1; transform:none}}
+  .modal-head{display:flex; align-items:center; justify-content:space-between; gap:12px}
+  .modal-head h3{font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px; margin:0}
+  .modal-head h3 .ico{width:18px; height:18px; color:var(--primary)}
+  .modal > .desc{color:var(--ink-soft); font-size:13.5px; margin:10px 0 12px}
+  .modal-ta{width:100%}
+  .modal-foot{display:flex; gap:10px; justify-content:flex-end; margin-top:14px}
 
   /* ---------- Cards ---------- */
   .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg);

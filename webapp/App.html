@@ -23,6 +23,44 @@ function resumenTexto(r){
     (r.omitidos?', '+r.omitidos+' omitidos':'')+
     (r.errores?', '+r.errores+' con error':'')+'.';
 }
+
+/**
+ * Abre un modal con un área de texto para pegar (importaciones puntuales).
+ * cfg = { titulo, desc, placeholder, aceptar, onAceptar(texto, ctx) }
+ *   ctx = { cerrar(), st (elemento de estado), btn (botón aceptar) }
+ * Devuelve { cerrar }.
+ */
+function modalPegar(cfg){
+  cfg = cfg || {};
+  var ov = document.createElement('div');
+  ov.className = 'modal-ov';
+  ov.innerHTML =
+    '<div class="modal" role="dialog" aria-modal="true">'+
+      '<div class="modal-head"><h3>'+icon('importar')+esc(cfg.titulo||'Importar')+'</h3>'+
+        '<button class="btn ghost sm icononly modal-x" title="Cerrar">'+icon('cerrar')+'</button></div>'+
+      (cfg.desc?'<p class="desc">'+esc(cfg.desc)+'</p>':'')+
+      '<textarea class="modal-ta" rows="8" placeholder="'+esc(cfg.placeholder||'')+'" '+
+        'style="font-family:var(--mono);font-size:12.5px"></textarea>'+
+      '<p class="status modal-st"></p>'+
+      '<div class="modal-foot">'+
+        '<button class="btn ghost modal-cancel">Cancelar</button>'+
+        '<button class="btn primary modal-ok">'+icon('importar')+esc(cfg.aceptar||'Añadir')+'</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  var ta = ov.querySelector('.modal-ta'), st = ov.querySelector('.modal-st');
+  function cerrar(){ if(ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); }
+  function onKey(e){ if(e.key==='Escape') cerrar(); }
+  document.addEventListener('keydown', onKey);
+  ov.addEventListener('mousedown', function(e){ if(e.target===ov) cerrar(); });
+  ov.querySelector('.modal-x').onclick = cerrar;
+  ov.querySelector('.modal-cancel').onclick = cerrar;
+  ov.querySelector('.modal-ok').onclick = function(){
+    if(cfg.onAceptar) cfg.onAceptar(ta.value, { cerrar: cerrar, st: st, btn: this });
+  };
+  setTimeout(function(){ ta.focus(); }, 30);
+  return { cerrar: cerrar };
+}
 /** Ejecuta una llamada al servidor gestionando botón y estado. */
 function correr(btn, st, cargando, runFn, okFn){
   if(btn) btn.disabled=true;
