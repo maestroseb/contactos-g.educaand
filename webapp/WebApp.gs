@@ -89,13 +89,17 @@ function etiquetasSugeridasDe_(e) {
 /** Datos para el asistente de configuración. */
 function getEstadoConfig() {
   exigirAdmin_();
+  const claustro = leerContactosCentroStore_()
+    .filter(c => c && c.email)
+    .map(c => ({ nombre: c.nombre || '', apellidos: c.apellidos || '', email: String(c.email).trim() }));
   return {
     adminEmail: getAdminEmail_(),
     adminsExtra: getAdminsExtra_(),
     yo: correoUsuarioActual_(),
     defaults: DEFAULTS,
     config: getConfig_() || {},
-    numContactos: leerContactosCentroStore_().length
+    numContactos: claustro.length,
+    claustro: claustro
   };
 }
 

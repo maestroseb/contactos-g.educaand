@@ -49,7 +49,10 @@ function pintar(cont, estado, s){
         '<p class="desc">Pueden configurar el centro y editar la lista del claustro. El principal no se puede quitar (evita bloqueos).</p>',
         '<div id="adminsList"></div>',
         '<div class="row" style="margin-top:12px">',
-          '<input id="admNuevo" placeholder="correo@g.educaand.es" autocomplete="off" style="flex:1;min-width:180px">',
+          '<div class="ac-wrap" style="flex:1;min-width:180px">',
+            '<input id="admNuevo" placeholder="Nombre, apellidos o correo…" autocomplete="off" style="width:100%">',
+            '<div class="ac-list" id="admAC" hidden></div>',
+          '</div>',
           '<button class="btn" id="admAdd">'+icon('add')+'Añadir</button>',
           '<button class="btn primary" id="admGuardar">'+icon('guardar')+'Guardar</button>',
         '</div>',
@@ -83,6 +86,7 @@ function pintar(cont, estado, s){
   var owner = (s.adminEmail||'').toLowerCase();
   var yo = (s.yo||'').toLowerCase();
   var adminsLocal = (s.adminsExtra||[]).slice();
+  var claustro = s.claustro || [];   // para autocompletar correos
 
   function pintarAdmins(){
     var box = cont.querySelector('#adminsList');
@@ -114,19 +118,46 @@ function pintar(cont, estado, s){
   }
   pintarAdmins();
 
-  function addAdmin(){
+  function addAdmin(emailDado){
     var inp = cont.querySelector('#admNuevo'), st = cont.querySelector('#sAdmins');
-    var v = inp.value.trim().toLowerCase();
+    var v = String(emailDado || inp.value).trim().toLowerCase();
     if(!v) return;
-    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ setStatus(st, 'Ese correo no es válido.', 'err'); return; }
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ setStatus(st, 'Escribe un nombre del claustro o un correo válido.', 'err'); return; }
     if(v===owner){ setStatus(st, 'Ese ya es el administrador principal.', ''); inp.value=''; return; }
     if(adminsLocal.indexOf(v)!==-1){ setStatus(st, 'Ya está en la lista.', ''); inp.value=''; return; }
     if(v.indexOf('@g.educaand.es')===-1) setStatus(st, 'Añadido. Aviso: no es @g.educaand.es y quizá no pueda entrar en la app.', '');
     else setStatus(st, 'Añadido. Pulsa «Guardar administradores».', '');
-    adminsLocal.push(v); inp.value=''; pintarAdmins();
+    adminsLocal.push(v); inp.value=''; ocultarAC(); pintarAdmins();
   }
-  cont.querySelector('#admAdd').onclick = addAdmin;
+  cont.querySelector('#admAdd').onclick = function(){ addAdmin(); };
   cont.querySelector('#admNuevo').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); addAdmin(); } });
+
+  /* Autocompletado de correos a partir de la lista del profesorado. */
+  var inpAdm = cont.querySelector('#admNuevo'), acBox = cont.querySelector('#admAC');
+  function ocultarAC(){ acBox.hidden = true; acBox.innerHTML = ''; }
+  function pintarAC(){
+    var q = inpAdm.value.trim().toLowerCase();
+    if(!q){ ocultarAC(); return; }
+    var ya = {}; ya[owner] = true; adminsLocal.forEach(function(e){ ya[e] = true; });
+    var res = [];
+    for(var i=0;i<claustro.length && res.length<8;i++){
+      var p = claustro[i], mail = String(p.email||'').toLowerCase();
+      if(!mail || ya[mail]) continue;
+      if(((p.nombre||'')+' '+(p.apellidos||'')+' '+mail).toLowerCase().indexOf(q) !== -1) res.push(p);
+    }
+    if(!res.length){ ocultarAC(); return; }
+    acBox.innerHTML = res.map(function(p){
+      var nom = ((p.nombre||'')+' '+(p.apellidos||'')).trim() || p.email;
+      return '<div class="ac-item" data-email="'+esc(p.email)+'"><b>'+esc(nom)+'</b><small>'+esc(p.email)+'</small></div>';
+    }).join('');
+    acBox.hidden = false;
+    Array.prototype.forEach.call(acBox.querySelectorAll('.ac-item'), function(it){
+      it.onmousedown = function(e){ e.preventDefault(); addAdmin(it.getAttribute('data-email')); };
+    });
+  }
+  inpAdm.addEventListener('input', pintarAC);
+  inpAdm.addEventListener('focus', pintarAC);
+  inpAdm.addEventListener('blur', function(){ setTimeout(ocultarAC, 150); });
   cont.querySelector('#admGuardar').onclick = function(){
     correr(this, cont.querySelector('#sAdmins'), 'Guardando…',
       function(r){ r.guardarAdmins(adminsLocal); },
@@ -135,8 +166,20 @@ function pintar(cont, estado, s){
   };
 
   var floatBtn = cont.querySelector('#cfgSave');
-  function mostrarGuardar(){ floatBtn.hidden = false; }
-  // El botón flotante guarda la CONFIG; no debe aparecer al editar administradores.
+  function serializarCfg(){
+    return JSON.stringify({
+      codigo: cont.querySelector('#codigo').value.trim(),
+      nombre: cont.querySelector('#nombre').value.trim(),
+      esp: cont.querySelector('#esp').value,
+      g: cont.querySelector('#etqGrupo').value, d: cont.querySelector('#etqDeptos').value,
+      c: cont.querySelector('#etqCargos').value, o: cont.querySelector('#etqOtros').value
+    });
+  }
+  var cfgInicial = serializarCfg();
+  // Aparece solo si hay cambios reales; si los reviertes, vuelve a ocultarse.
+  function mostrarGuardar(){ floatBtn.hidden = pend ? false : (serializarCfg() === cfgInicial); }
+  if(pend) floatBtn.hidden = false;   // primera configuración: siempre visible
+  // El botón flotante guarda la CONFIG; no debe reaccionar al editar administradores.
   cont.addEventListener('input', function(e){ if(e.target.closest('.admins-card')) return; mostrarGuardar(); });
 
   cont.querySelector('#bVer').onclick = function(){
@@ -173,6 +216,7 @@ function pintar(cont, estado, s){
         ESTADO.etiquetasSugeridas = [].concat(res.etiquetas.grupo||[], res.etiquetas.departamentos||[], res.etiquetas.cargos||[], res.etiquetas.otros||[]);
         if(typeof invalidarTab==='function') invalidarTab('contactosCentro');  // refresca la paleta al reabrir
         var b=document.querySelector('.brand b'); if(b) b.textContent = res.nombreCentro || ESTADO.nombreApp;
+        cfgInicial = serializarCfg();   // nueva base: si no vuelves a cambiar nada, no reaparece
         floatBtn.disabled=false; floatBtn.hidden=true; floatBtn.innerHTML=icon('ok')+'Guardado';
         setTimeout(function(){ floatBtn.innerHTML=icon('guardar')+'Guardar configuración'; }, 1500);
       })

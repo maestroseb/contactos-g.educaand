@@ -17,44 +17,58 @@ window.TABS.contactosCentro = {
 
     cont.innerHTML = [
       '<div class="card">',
-        '<h2>'+icon('claustro')+'Claustro'+(estado.nombreCentro?' de '+esc(estado.nombreCentro):'')+'</h2>',
+        '<div class="card-head">',
+          '<h2>'+icon('claustro')+'Claustro'+(estado.nombreCentro?' de '+esc(estado.nombreCentro):'')+'</h2>',
+          '<button class="btn sm" id="bImport">'+icon('importar')+'Importar desde Séneca…</button>',
+        '</div>',
         '<p class="desc">Elige una etiqueta abajo y <b>pincha (o arrastra arriba/abajo) sobre las personas</b> para asignársela; vuelve a pinchar para quitarla. También puedes marcar filas y aplicarla en bloque. <b>Doble clic</b> en una etiqueta para <b>renombrarla</b> en todo el claustro.</p>',
         '<div class="palette" id="paleta"></div>',
         '<div id="gridZona"><p class="muted">Cargando claustro…</p></div>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir persona</button>',
-          '<button class="btn" id="bImport">'+icon('importar')+'Importar desde Séneca…</button>',
-          '<button class="btn primary" id="bGuardar">'+icon('guardar')+'Guardar claustro</button>',
           '<button class="btn danger" id="bVaciar" style="margin-left:auto">'+icon('borrar')+'Vaciar lista</button>',
         '</div>',
         '<p class="status" id="sAdmin"></p>',
-      '</div>'
+      '</div>',
+      '<button class="btn primary floatsave" id="claustroSave" hidden>'+icon('guardar')+'Guardar claustro</button>'
     ].join('');
 
     var zona = cont.querySelector('#gridZona');
+    var filasInicial = null;   // instantánea para detectar cambios (y reversiones)
+
+    // Serializa lo que se guardaría; si coincide con lo cargado, no hay cambios.
+    function serializarFilas(){
+      return JSON.stringify(FILAS.map(paraGuardar).filter(function(f){ return f.email||f.nombre; }));
+    }
+    function revisarClaustro(){
+      var b = cont.querySelector('#claustroSave');
+      if(!b || filasInicial === null) return;
+      b.hidden = (serializarFilas() === filasInicial);
+    }
 
     google.script.run
       .withSuccessHandler(function (lista) {
         FILAS = (lista||[]).map(function(c){ return normaliza(c); });
         if(!FILAS.length) FILAS = [filaVacia()];
         pintarPaleta(); renderGrid();
+        filasInicial = serializarFilas(); revisarClaustro();
       })
       .withFailureHandler(function (e) { zona.innerHTML = '<p class="status err">'+esc(mensajeError(e))+'</p>'; })
       .adminLeerContactos();
 
     // acciones
     cont.querySelector('#bAdd').onclick = function(){ FILAS.push(filaVacia()); renderGrid(); };
-    cont.querySelector('#bGuardar').onclick = function(){
+    cont.querySelector('#claustroSave').onclick = function(){
       var filas = FILAS.map(paraGuardar).filter(function(f){ return f.email||f.nombre; });
       correr(this, cont.querySelector('#sAdmin'), 'Guardando…',
         function(r){ r.adminGuardarContactos(filas); },
-        function(n, st){ setStatus(st, 'Guardado: '+n+' personas en el claustro.', 'ok'); });
+        function(n, st){ filasInicial = serializarFilas(); revisarClaustro(); setStatus(st, 'Guardado: '+n+' personas en el claustro.', 'ok'); });
     };
     cont.querySelector('#bVaciar').onclick = function(){
       if(!confirm('¿Vaciar TODA la lista del claustro?\n\nSolo borra la lista del centro; no elimina contactos de Google de nadie.')) return;
       correr(this, cont.querySelector('#sAdmin'), 'Vaciando…',
         function(r){ r.adminGuardarContactos([]); },
-        function(n, st){ FILAS=[filaVacia()]; SEL.clear(); pintarPaleta(); renderGrid(); setStatus(st, 'Lista del claustro vaciada.', 'ok'); });
+        function(n, st){ FILAS=[filaVacia()]; SEL.clear(); pintarPaleta(); renderGrid(); filasInicial = serializarFilas(); revisarClaustro(); setStatus(st, 'Lista del claustro vaciada.', 'ok'); });
     };
     cont.querySelector('#bImport').onclick = function(){
       modalPegar({
@@ -234,7 +248,7 @@ window.TABS.contactosCentro = {
       var tabla = zona.querySelector('table');
       // inputs de texto
       Array.prototype.forEach.call(zona.querySelectorAll('input[data-k]'), function(inp){
-        inp.oninput = function(){ var f=fila(inp); if(f) f[inp.getAttribute('data-k')] = inp.value; };
+        inp.oninput = function(){ var f=fila(inp); if(f) f[inp.getAttribute('data-k')] = inp.value; revisarClaustro(); };
       });
       // selección
       var selall = zona.querySelector('.selall');
@@ -265,6 +279,7 @@ window.TABS.contactosCentro = {
           aplicarPintura(tr, f);
         });
       });
+      revisarClaustro();
     }
 
     function pintarEn(x, y){
