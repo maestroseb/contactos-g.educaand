@@ -78,6 +78,13 @@
   .badge .ico{width:14px;height:14px}
   .avatar{width:36px; height:36px; border-radius:50%; flex:none; display:grid; place-items:center;
     background:linear-gradient(150deg,var(--primary),var(--primary-strong)); color:#fff; font-weight:700; font-size:15px}
+  /* Identidad del usuario (avatar + correo + rol) */
+  .userbox{display:flex; align-items:center; gap:9px; min-width:0}
+  .userbox .uinfo{display:flex; flex-direction:column; min-width:0; line-height:1.25}
+  .userbox .uinfo b{font-size:13px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px}
+  .userbox .uinfo small{display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; color:var(--ink-faint)}
+  .userbox .uinfo small .ico{width:13px; height:13px}
+  .userbox .uinfo small.is-admin{color:var(--primary-ink)}
   .appbar-right{flex-wrap:wrap}
   .appbar-right .sep{width:1px; height:24px; background:var(--border); margin:0 2px}
   .hdr-sync{display:inline-flex; gap:8px; align-items:center; flex-wrap:wrap}
@@ -87,8 +94,9 @@
   .syncarea .status{margin:0}
 
   .tabbar{display:flex; gap:2px; background:var(--surface); padding:0 22px; border-bottom:1px solid var(--border);
-    overflow-x:auto}
-  .tabbar button{position:relative; display:inline-flex; align-items:center; gap:9px; cursor:pointer;
+    overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:none}
+  .tabbar::-webkit-scrollbar{display:none}
+  .tabbar button{position:relative; flex:none; display:inline-flex; align-items:center; gap:9px; cursor:pointer;
     background:transparent; border:none; color:var(--ink-soft); font-family:var(--sans); font-size:14px; font-weight:500;
     padding:15px 14px; white-space:nowrap; transition:color .15s}
   .tabbar button .ico{width:18px;height:18px; color:var(--ink-faint); transition:color .15s}
@@ -128,7 +136,7 @@
   /* flex:1 → las cajas llenan la altura de la columna (sin «barriga» por abajo). */
   .cfg-col textarea{width:100%; flex:1 1 auto; min-height:168px; resize:vertical}
   /* Botón Guardar flotante */
-  .floatsave{position:fixed; right:26px; bottom:26px; z-index:60; border-radius:999px;
+  .floatsave{position:fixed; right:26px; bottom:calc(26px + env(safe-area-inset-bottom,0px)); z-index:60; border-radius:999px;
     padding-left:20px; padding-right:20px;
     box-shadow:0 12px 28px rgba(101,88,245,.42), 0 4px 12px rgba(0,0,0,.18);
     transition:transform .12s ease, box-shadow .12s ease}
@@ -380,9 +388,9 @@
     /* Los hijos de .appbar-right pasan a colocarse en la barra directamente. */
     .appbar-right{display:contents}
     .appbar .sep{display:none}
-    .brand{order:1; flex:1 1 auto}
-    .appbar .badge{order:2}
-    .appbar .avatar{order:3}
+    .brand{order:1; flex:1 1 auto; min-width:120px}
+    .appbar .userbox{order:2}
+    .userbox .uinfo b{max-width:150px}
     /* Botones de sincronización apilados y a lo ancho, debajo. */
     .hdr-sync{order:4; width:100%; flex-direction:column; align-items:stretch; gap:8px}
     .hdr-sync .syncwrap{display:flex; width:100%}
@@ -391,7 +399,7 @@
     .syncarea{padding:9px 16px}
     .tabbar{padding:0 10px}
     .tabbar button{padding:13px 11px; font-size:13.5px}
-    .page{padding:22px 18px 54px}
+    .page{padding:22px 18px calc(54px + env(safe-area-inset-bottom,0px))}
     .pagehead h1{font-size:22px}
     .grid2{grid-template-columns:1fr}
   }

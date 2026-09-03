@@ -277,9 +277,14 @@ function construirShell(estado, preferida){
                 icon('power')+(estado.diariaActiva?'Diaria: activada':'Diaria: desactivada')+'</button>'+
             '</div>'+
             '<span class="sep"></span>'+
-            '<span class="badge '+(estado.esAdmin?'admin':'prof')+'">'+icon(estado.esAdmin?'config':'yo')+
-              (estado.esAdmin?'Administrador':'Profesorado')+'</span>'+
-            '<span class="avatar" title="'+esc(estado.email||'')+'">'+esc(inicial)+'</span>'+
+            '<div class="userbox" title="'+esc(estado.email||'')+'">'+
+              '<span class="avatar">'+esc(inicial)+'</span>'+
+              '<span class="uinfo">'+
+                '<b>'+esc(estado.email||'—')+'</b>'+
+                '<small class="'+(estado.esAdmin?'is-admin':'')+'">'+icon(estado.esAdmin?'config':'yo')+
+                  (estado.esAdmin?'Administrador':'Profesorado')+'</small>'+
+              '</span>'+
+            '</div>'+
           '</div>'+
         '</header>'+
         '<nav class="tabbar">'+nav+'</nav>'+

@@ -30,7 +30,7 @@ function paginaApp_(email, esAdmin) {
   t.esAdmin = esAdmin;
   const out = t.evaluate()
     .setTitle(PARAMS.nombreApp)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   ponerFavicon_(out);
   return out;
@@ -44,7 +44,7 @@ function paginaDenegado_(email, motivo) {
   t.motivo = motivo || '';
   const out = t.evaluate()
     .setTitle(PARAMS.nombreApp)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
   ponerFavicon_(out);
   return out;
 }
