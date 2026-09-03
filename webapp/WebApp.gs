@@ -91,10 +91,19 @@ function getEstadoConfig() {
   exigirAdmin_();
   return {
     adminEmail: getAdminEmail_(),
+    adminsExtra: getAdminsExtra_(),
+    yo: correoUsuarioActual_(),
     defaults: DEFAULTS,
     config: getConfig_() || {},
     numContactos: leerContactosCentroStore_().length
   };
+}
+
+/** Guarda la lista de administradores adicionales (solo un admin puede). */
+function guardarAdmins(lista) {
+  exigirAdmin_();
+  const guardados = setAdminsExtra_(lista);
+  return { owner: getAdminEmail_(), extra: guardados };
 }
 
 /** Verifica un código de centro contra el catálogo. */

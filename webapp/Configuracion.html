@@ -60,12 +60,67 @@ function pintar(cont, estado, s){
       '</div>',
     '</div>',
 
+    '<div class="card admins-card">',
+      '<h2>'+icon('config')+'Administradores</h2>',
+      '<p class="desc">Los administradores pueden configurar el centro y editar la lista del claustro. El administrador principal no se puede quitar (evita bloqueos).</p>',
+      '<div id="adminsList"></div>',
+      '<div class="row" style="margin-top:12px">',
+        '<input id="admNuevo" placeholder="correo@g.educaand.es" autocomplete="off" style="flex:1;min-width:220px">',
+        '<button class="btn" id="admAdd">'+icon('add')+'Añadir</button>',
+        '<button class="btn primary" id="admGuardar">'+icon('guardar')+'Guardar administradores</button>',
+      '</div>',
+      '<p class="status" id="sAdmins"></p>',
+    '</div>',
+
     '<button class="btn primary floatsave" id="cfgSave" hidden>'+icon('guardar')+'Guardar configuración</button>'
   ].join('');
 
+  /* ---------- Administradores ---------- */
+  var owner = (s.adminEmail||'').toLowerCase();
+  var yo = (s.yo||'').toLowerCase();
+  var adminsLocal = (s.adminsExtra||[]).slice();
+
+  function pintarAdmins(){
+    var box = cont.querySelector('#adminsList');
+    var filas = ['<div style="display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap">'+
+      '<span class="chip solo" style="--h:'+hue(owner)+'">'+esc(s.adminEmail)+'</span>'+
+      '<span class="badge admin">'+icon('config')+'Principal</span>'+(owner===yo?'<span class="muted">· tú</span>':'')+'</div>'];
+    adminsLocal.forEach(function(e){
+      filas.push('<div style="display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap">'+
+        '<span class="chip solo" style="--h:'+hue(e)+'">'+esc(e)+'</span>'+(e===yo?'<span class="muted">· tú</span>':'')+
+        '<button class="btn danger sm icononly" data-rm="'+esc(e)+'" title="Quitar">'+icon('borrar')+'</button></div>');
+    });
+    box.innerHTML = filas.join('');
+    Array.prototype.forEach.call(box.querySelectorAll('button[data-rm]'), function(b){
+      b.onclick = function(){ var e=b.getAttribute('data-rm'); adminsLocal = adminsLocal.filter(function(x){return x!==e;}); pintarAdmins(); };
+    });
+  }
+  pintarAdmins();
+
+  function addAdmin(){
+    var inp = cont.querySelector('#admNuevo'), st = cont.querySelector('#sAdmins');
+    var v = inp.value.trim().toLowerCase();
+    if(!v) return;
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ setStatus(st, 'Ese correo no es válido.', 'err'); return; }
+    if(v===owner){ setStatus(st, 'Ese ya es el administrador principal.', ''); inp.value=''; return; }
+    if(adminsLocal.indexOf(v)!==-1){ setStatus(st, 'Ya está en la lista.', ''); inp.value=''; return; }
+    if(v.indexOf('@g.educaand.es')===-1) setStatus(st, 'Añadido. Aviso: no es @g.educaand.es y quizá no pueda entrar en la app.', '');
+    else setStatus(st, 'Añadido. Pulsa «Guardar administradores».', '');
+    adminsLocal.push(v); inp.value=''; pintarAdmins();
+  }
+  cont.querySelector('#admAdd').onclick = addAdmin;
+  cont.querySelector('#admNuevo').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); addAdmin(); } });
+  cont.querySelector('#admGuardar').onclick = function(){
+    correr(this, cont.querySelector('#sAdmins'), 'Guardando…',
+      function(r){ r.guardarAdmins(adminsLocal); },
+      function(res, st){ adminsLocal=(res.extra||[]).slice(); pintarAdmins();
+        setStatus(st, 'Administradores guardados: '+(adminsLocal.length+1)+' en total.', 'ok'); });
+  };
+
   var floatBtn = cont.querySelector('#cfgSave');
   function mostrarGuardar(){ floatBtn.hidden = false; }
-  cont.addEventListener('input', mostrarGuardar);
+  // El botón flotante guarda la CONFIG; no debe aparecer al editar administradores.
+  cont.addEventListener('input', function(e){ if(e.target.closest('.admins-card')) return; mostrarGuardar(); });
 
   cont.querySelector('#bVer').onclick = function(){
     var codigo = cont.querySelector('#codigo').value.trim();

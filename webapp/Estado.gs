@@ -9,7 +9,8 @@
  * Solo el administrador (detectado en el primer despliegue) puede escribir.
  */
 
-const PROP_ADMIN = 'adminEmail';
+const PROP_ADMIN = 'adminEmail';       // administrador principal (primer usuario)
+const PROP_ADMINS = 'adminsExtra';     // administradores adicionales (JSON array)
 const PROP_CONFIG = 'configCentro';
 const PROP_CONTACTOS_PREFIJO = 'contactosCentro_';
 const PROP_CONTACTOS_NUM = 'contactosCentroNumTrozos';
@@ -21,6 +22,7 @@ const PROP_CONTACTOS_NUM = 'contactosCentroNumTrozos';
  * y reparsear las Script Properties una y otra vez. Se invalida al guardar. */
 const CACHE_CONFIG = 'cacheConfig_v1';
 const CACHE_CONTACTOS = 'cacheContactos_v1';
+const CACHE_ADMINS = 'cacheAdmins_v1';
 const CACHE_TTL = 21600;   // 6 h (máximo de CacheService)
 const CACHE_MAX = 95000;   // no cachear valores por encima del límite (~100 KB)
 
@@ -45,10 +47,51 @@ function fijarAdminSiVacio_(email) {
   return props.getProperty(PROP_ADMIN) || '';
 }
 
-/** ¿Es este correo el administrador? */
-function esAdmin_(email) {
+/** ¿Es este correo el administrador PRINCIPAL (el original, no eliminable)? */
+function esAdminPrincipal_(email) {
   const admin = getAdminEmail_();
   return !!admin && !!email && admin.trim().toLowerCase() === email.trim().toLowerCase();
+}
+
+/** ¿Es este correo administrador (principal o adicional)? */
+function esAdmin_(email) {
+  if (!email) return false;
+  if (esAdminPrincipal_(email)) return true;
+  return getAdminsExtra_().indexOf(email.trim().toLowerCase()) !== -1;
+}
+
+/** Lista de administradores adicionales (en minúsculas), con caché. */
+function getAdminsExtra_() {
+  const cache = cacheScript_();
+  if (cache) {
+    const c = cache.get(CACHE_ADMINS);
+    if (c !== null) { try { return JSON.parse(c); } catch (e) {} }
+  }
+  const raw = PropertiesService.getScriptProperties().getProperty(PROP_ADMINS);
+  let lista = [];
+  if (raw) { try { lista = JSON.parse(raw); } catch (e) { lista = []; } }
+  if (!Array.isArray(lista)) lista = [];
+  if (cache) { try { cache.put(CACHE_ADMINS, JSON.stringify(lista), CACHE_TTL); } catch (e) {} }
+  return lista;
+}
+
+/**
+ * Guarda la lista de administradores adicionales. Normaliza a minúsculas,
+ * quita duplicados y NUNCA incluye al administrador principal (que ya lo es
+ * por sí mismo y no se puede degradar aquí, para evitar bloqueos).
+ */
+function setAdminsExtra_(lista) {
+  const owner = getAdminEmail_().trim().toLowerCase();
+  const set = {}, out = [];
+  (lista || []).forEach(function (e) {
+    const v = String(e || '').trim().toLowerCase();
+    if (v && v !== owner && !set[v]) { set[v] = true; out.push(v); }
+  });
+  const json = JSON.stringify(out);
+  PropertiesService.getScriptProperties().setProperty(PROP_ADMINS, json);
+  const cache = cacheScript_();
+  if (cache) { try { cache.put(CACHE_ADMINS, json, CACHE_TTL); } catch (e) {} }
+  return out;
 }
 
 /* --------------------------- Configuración --------------------------- */
