@@ -1,6 +1,14 @@
 <script>
 /* ===================== Utilidades ===================== */
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/** Hue estable (0-359) a partir de una cadena (para colorear chips de etiqueta). */
+function hue(s){ var h=0; s=String(s); for(var i=0;i<s.length;i++) h=(h*31 + s.charCodeAt(i))>>>0; return h%360; }
+/** Devuelve una lista de valores como chips de color. */
+function chipsHTML(lista){
+  return (lista||[]).filter(Boolean).map(function(t){
+    return '<span class="chip" style="--h:'+hue(t)+'">'+esc(t)+'</span>';
+  }).join(' ');
+}
 function icon(name, cls){
   return '<svg class="ico'+(cls?' '+cls:'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
     'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(window.ICON[name]||'')+'</svg>';
@@ -221,7 +229,7 @@ function construirShell(estado, preferida){
                 '<button class="btn sm primary splitcaret" id="hSyncMenu" title="Elegir grupos a sincronizar">'+icon('chevron','rot90')+'</button>'+
                 '<div class="syncpop" id="syncPop" hidden></div>'+
               '</div>'+
-              '<button class="btn sm'+(estado.diariaActiva?' danger':'')+'" id="hDiaria" title="Sincronización automática cada día">'+
+              '<button class="btn sm'+(estado.diariaActiva?' good':'')+'" id="hDiaria" title="Sincronización automática cada día">'+
                 icon('power')+(estado.diariaActiva?'Diaria: activada':'Diaria: desactivada')+'</button>'+
             '</div>'+
             '<span class="sep"></span>'+

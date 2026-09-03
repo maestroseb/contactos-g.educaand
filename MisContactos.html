@@ -118,9 +118,11 @@ function pintarMis(cont, lista){
   if(!lista.length){ box.innerHTML='<p class="muted">No hay contactos.</p>'; return; }
   box.innerHTML='<div class="tablewrap" style="margin-top:14px"><table><thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Organización / DPTO</th><th>Etiquetas</th><th></th></tr></thead><tbody>'+
     lista.map(function(c){
+      var puesto = c.puesto ? '<span class="chip" style="--h:'+hue(c.puesto)+'">'+esc(c.puesto)+'</span>' : '<span class="muted">—</span>';
+      var etqs = (c.grupos&&c.grupos.length) ? '<div class="etq-cell">'+chipsHTML(c.grupos)+'</div>' : '<span class="muted">—</span>';
       return '<tr><td>'+esc(c.nombre)+'</td><td>'+esc(c.apellidos)+'</td><td>'+esc(c.email)+'</td><td>'+
-        esc(c.telefono||'')+'</td><td>'+esc(c.puesto||'')+'</td><td>'+
-        esc((c.grupos||[]).join(', '))+'</td><td><button class="btn danger sm icononly" data-rn="'+esc(c.resourceName)+'" title="Eliminar">'+icon('borrar')+'</button></td></tr>';
+        esc(c.telefono||'')+'</td><td>'+puesto+'</td><td>'+etqs+
+        '</td><td><button class="btn danger sm icononly" data-rn="'+esc(c.resourceName)+'" title="Eliminar">'+icon('borrar')+'</button></td></tr>';
     }).join('')+'</tbody></table></div>';
   Array.prototype.forEach.call(box.querySelectorAll('button[data-rn]'), function(b){
     b.onclick=function(){
