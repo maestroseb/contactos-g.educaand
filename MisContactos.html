@@ -35,7 +35,10 @@ window.TABS.misContactos = {
         '<div class="tablewrap"><table id="tPropios" class="rejilla mis"><thead><tr>',
           '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas</th><th></th>',
         '</tr></thead><tbody></tbody></table></div>',
-        '<div class="row" style="margin-top:14px"><button class="btn sm" id="bAdd">'+icon('add')+'Añadir fila</button></div>',
+        '<div class="row" style="margin-top:14px">',
+          '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir fila</button>',
+          '<button class="btn danger sm" id="bVaciarPropios" style="margin-left:auto">'+icon('borrar')+'Vaciar lista</button>',
+        '</div>',
         '<p class="status" id="sPropios"></p>',
       '</div>',
 
@@ -148,6 +151,14 @@ window.TABS.misContactos = {
     propiosInicial = JSON.stringify(leerPropios(tb));
 
     cont.querySelector('#bAdd').onclick = function(){ filaPropio(tb, {}, revisar); revisar(); };
+    cont.querySelector('#bVaciarPropios').onclick = function(){
+      modalConfirmar({ titulo:'Vaciar contactos propios', icono:'borrar', peligro:true, aceptar:'Vaciar',
+        mensaje:'¿Vaciar TODA tu lista de contactos propios?\n\nSe quitarán de la tabla; el cambio se aplicará al pulsar «Guardar cambios».',
+        onAceptar:function(){
+          tb.innerHTML = ''; filaPropio(tb, {}, revisar); revisar();
+          setStatus(sPropios, 'Lista vaciada. Pulsa «Guardar cambios» para aplicarlo.', 'ok');
+        }});
+    };
     cont.querySelector('#bImport').onclick = function(){
       modalPegar({
         titulo: 'Importar contactos',

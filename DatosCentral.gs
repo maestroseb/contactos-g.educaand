@@ -36,14 +36,93 @@ function gruposDelCentro_() {
  * PDF: correos y teléfonos que quedan partidos).
  */
 function parsearClaustroPegado_(texto) {
-  const matriz = String(texto || '')
-    .split(/\r?\n/)
-    .filter(l => l.trim() !== '')
-    .map(l => l.split('\t').map(s => s.trim()));
-  if (!matriz.length) return [];
+  const lineas = String(texto || '').split(/\r?\n/);
+  const noVacias = lineas.filter(l => l.trim() !== '');
+  if (!noVacias.length) return [];
 
+  const matriz = noVacias.map(l => l.split('\t').map(s => s.trim()));
+
+  // 1) Formato «vertical»: un valor por línea, sin tabuladores (lo que sale al
+  //    copiar y pegar directamente de la pantalla HTML de Séneca).
+  const hayTabs = matriz.some(f => f.length > 1);
+  const hayEmail = noVacias.some(l => /^\S+@\S+\.\S+$/.test(l.trim()));
+  const hayNombre = noVacias.some(esLineaNombre_);
+  if (!hayTabs && hayEmail && hayNombre) return parsearVertical_(noVacias);
+
+  // 2) Columnas por tabulador con fila de encabezados.
   const cab = detectarCabecera_(matriz);
-  return cab ? parsearConCabecera_(matriz, cab) : parsearHeuristico_(matriz);
+  if (cab) return parsearConCabecera_(matriz, cab);
+
+  // 3) Heurística por posición.
+  return parsearHeuristico_(matriz);
+}
+
+/** ¿La línea es un nombre «Apellidos, Nombre»? (lleva coma, empieza por letra, sin @). */
+function esLineaNombre_(l) {
+  const t = String(l).trim();
+  return t.indexOf(',') > 0 && !/^\d/.test(t) && t.indexOf('@') === -1 && /[A-Za-zÀ-ÿ]/.test(t);
+}
+
+/**
+ * Parsea el formato «vertical» de Séneca (un valor por línea). No se fía del nº
+ * de líneas por persona (a veces hay saltos de más, y la «Fecha de cese» puede
+ * venir vacía): segmenta cada registro por su LÍNEA DE NOMBRE y clasifica el
+ * resto por contenido. Descarta el bloque de encabezados si lo hay (todo lo
+ * anterior al primer nombre). Del teléfono prioriza el móvil (empieza por 6 o 7),
+ * quita duplicados y, si hay varios móviles, se queda con el primero.
+ */
+function parsearVertical_(lineas) {
+  const filas = lineas.map(l => String(l).trim());
+  let ini = -1;
+  for (let i = 0; i < filas.length; i++) { if (esLineaNombre_(filas[i])) { ini = i; break; } }
+  if (ini === -1) return [];
+
+  // Un registro empieza en cada línea de nombre; las demás líneas se le acumulan.
+  const registros = [];
+  let actual = null;
+  for (let i = ini; i < filas.length; i++) {
+    const l = filas[i];
+    if (esLineaNombre_(l)) { actual = [l]; registros.push(actual); }
+    else if (actual && l !== '') actual.push(l);
+  }
+
+  const esFecha = c => /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(c);
+  const esDni = c => /^\d{7,8}\s*[a-zA-Z]$/.test(c);
+  const digitos = c => c.replace(/\D/g, '');
+  const esTelefono = c => { const d = digitos(c); return d.length >= 9 && d.length <= 12; };
+
+  const out = [];
+  registros.forEach(reg => {
+    const resto = reg.slice(1);
+
+    let email = '';
+    for (const l of resto) { if (l.indexOf('@') !== -1) { email = limpiarEmail_(l); break; } }
+    const local = email ? email.split('@')[0] : '';
+
+    // Teléfonos en orden y sin duplicados; se prioriza el móvil (6/7).
+    const tels = [];
+    resto.forEach(l => { if (l.indexOf('@') === -1 && esTelefono(l)) { const d = digitos(l); if (tels.indexOf(d) === -1) tels.push(d); } });
+    let telefono = '';
+    for (const d of tels) { if (/^[67]/.test(d)) { telefono = d; break; } }
+    if (!telefono && tels.length) telefono = tels[0];
+
+    // Puesto = 1ª línea de texto que no sea DNI, fecha, teléfono, correo ni el usuario IdEA.
+    let puesto = '';
+    for (const l of resto) {
+      if (!l || l.indexOf('@') !== -1) continue;
+      if (esFecha(l) || esDni(l) || esTelefono(l)) continue;
+      if (local && l.toLowerCase() === local) continue;
+      puesto = l; break;
+    }
+
+    const p = separarNombre_(reg[0]);
+    if (!email && !p.nombre && !p.apellidos) return;
+    out.push({
+      nombre: p.nombre, apellidos: p.apellidos, tipoEmail: 'Trabajo',
+      email: email, telefono: telefono, puesto: puesto, grupos: []
+    });
+  });
+  return out;
 }
 
 /** Normaliza para comparar encabezados: minúsculas, sin acentos ni dobles espacios. */
