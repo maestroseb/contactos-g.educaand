@@ -118,8 +118,11 @@ window.TABS.contactosCentro = {
       pal.innerHTML =
         (filasRows||filaUso ? (filasRows+filaUso) : '<p class="muted" style="margin:2px 0">No hay etiquetas configuradas. Añádelas en la pestaña «Configuración».</p>')+
         '<div class="pal-tools">'+
-          '<input id="etqLibre" placeholder="Otra etiqueta…" autocomplete="off">'+
-          '<button class="btn sm" id="bArmLibre">Usar esta</button>'+
+          '<div class="pal-search">'+
+            '<input id="etqLibre" placeholder="Buscar o crear etiqueta…" autocomplete="off" '+
+              'role="combobox" aria-expanded="false" aria-autocomplete="list">'+
+            '<div class="pal-ac" id="etqAC" hidden></div>'+
+          '</div>'+
           '<span class="assign-banner" id="armBanner"></span>'+
         '</div>';
 
@@ -128,11 +131,59 @@ window.TABS.contactosCentro = {
         ch.ondblclick = function(e){ e.stopPropagation(); iniciarRenombrar(ch); };
         ch.title = 'Clic: asignar · Doble clic: renombrar';
       });
-      pal.querySelector('#bArmLibre').onclick = function(){
-        var v = pal.querySelector('#etqLibre').value.trim(); if(v) armar(v);
-      };
-      pal.querySelector('#etqLibre').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); var v=this.value.trim(); if(v) armar(v); } });
+      montarAutocompletar(pal);
       refrescarArmado();
+    }
+
+    /** Todas las etiquetas conocidas (configuradas + en uso), sin repetir y ordenadas. */
+    function todasLasEtiquetas_(){
+      var set = {};
+      ['grupo','departamentos','cargos','otros'].forEach(function(k){ (cats[k]||[]).forEach(function(t){ if(t) set[t]=true; }); });
+      FILAS.forEach(function(f){ (f.grupos||[]).forEach(function(t){ if(t) set[t]=true; }); });
+      return Object.keys(set).sort(function(a,b){ return a.localeCompare(b, 'es'); });
+    }
+
+    /**
+     * Autocompletado del buscador de etiquetas: al escribir sugiere las que ya
+     * existen (clic para asignarlas) y, si lo tecleado no coincide con ninguna,
+     * ofrece «Crear «X»». Enter usa la resaltada o crea lo tecleado.
+     */
+    function montarAutocompletar(pal){
+      var inp = pal.querySelector('#etqLibre'), box = pal.querySelector('#etqAC');
+      var items = [], idx = -1;
+      var norm = function(s){ return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); };
+
+      function cerrar(){ box.hidden = true; box.innerHTML = ''; items = []; idx = -1; inp.setAttribute('aria-expanded', 'false'); }
+      function marcar(){ Array.prototype.forEach.call(box.children, function(el, i){ el.classList.toggle('activo', i === idx); }); }
+      function elegir(i){ var it = items[i]; if(!it) return; inp.value = ''; cerrar(); armar(it.tag); }
+      function abrir(){
+        var q = inp.value.trim(), qn = norm(q), todas = todasLasEtiquetas_();
+        var lista = (qn ? todas.filter(function(t){ return norm(t).indexOf(qn) !== -1; }) : todas).slice(0, 8);
+        var exacta = todas.some(function(t){ return norm(t) === qn; });
+        items = lista.map(function(t){ return { tag: t }; });
+        if(q && !exacta) items.push({ tag: q, crear: true });
+        if(!items.length){ cerrar(); return; }
+        box.innerHTML = items.map(function(it){
+          return it.crear
+            ? '<div class="pal-ac-item pal-ac-crear">'+icon('add')+'Crear «'+esc(it.tag)+'»</div>'
+            : '<div class="pal-ac-item"><span class="chip solo" style="--h:'+hue(it.tag)+'">'+esc(it.tag)+'</span></div>';
+        }).join('');
+        box.hidden = false; idx = -1; inp.setAttribute('aria-expanded', 'true');
+        Array.prototype.forEach.call(box.children, function(el, i){
+          el.onmousedown = function(e){ e.preventDefault(); };   // no perder el foco antes del clic
+          el.onclick = function(){ elegir(i); };
+        });
+      }
+
+      inp.addEventListener('input', abrir);
+      inp.addEventListener('focus', abrir);
+      inp.addEventListener('blur', function(){ setTimeout(cerrar, 120); });
+      inp.addEventListener('keydown', function(e){
+        if(e.key === 'ArrowDown'){ e.preventDefault(); if(box.hidden) abrir(); idx = Math.min(items.length - 1, idx + 1); marcar(); }
+        else if(e.key === 'ArrowUp'){ e.preventDefault(); idx = Math.max(0, idx - 1); marcar(); }
+        else if(e.key === 'Enter'){ e.preventDefault(); if(idx >= 0) elegir(idx); else { var v = inp.value.trim(); if(v){ inp.value = ''; cerrar(); armar(v); } } }
+        else if(e.key === 'Escape'){ cerrar(); }
+      });
     }
 
     function armar(tag){
