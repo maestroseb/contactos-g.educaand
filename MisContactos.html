@@ -162,7 +162,7 @@ window.TABS.misContactos = {
     cont.querySelector('#bImport').onclick = function(){
       modalPegar({
         titulo: 'Importar contactos',
-        desc: 'Sube un Excel/CSV o un PDF (p. ej. el listado de personal de Séneca), o pega el listado (celdas de una hoja de cálculo, CSV con comas o punto y coma, o directamente de la pantalla de Séneca). Se detecta el formato solo y las columnas por su encabezado (Empleado/a, Cuenta Google/Microsoft, Puesto, Teléfono, Móvil…) o, si no hay, por su contenido; del teléfono se prioriza el móvil. Se añaden a tu tabla; luego pulsa «Guardar cambios».',
+        desc: 'Sube un Excel o CSV (p. ej. el listado de personal de Séneca), o pega el listado (celdas de una hoja de cálculo, CSV con comas o punto y coma, o directamente de la pantalla de Séneca). Se detecta el formato solo y las columnas por su encabezado (Empleado/a, Cuenta Google/Microsoft, Puesto, Teléfono, Móvil…) o, si no hay, por su contenido; del teléfono se prioriza el móvil. Se añaden a tu tabla; luego pulsa «Guardar cambios».',
         placeholder: 'Apellidos, Nombre\tcorreo@…\tPuesto',
         aceptar: 'Añadir a la tabla',
         onAceptar: function(texto, ctx){

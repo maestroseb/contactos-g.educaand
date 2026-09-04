@@ -70,13 +70,13 @@ y oscuro, con iconos SVG (sin emojis):
 - **Configuración** (solo admin): centro (con verificación de código),
   especialidades, etiquetas y definición del claustro (grupo y/o lista).
 - **Contactos del centro** (solo admin): claustro editable e importación
-  subiendo el Excel/CSV o el PDF de Séneca, o pegando (celdas de una hoja de
-  cálculo con tabuladores, CSV con comas —respetando comillas— o punto y coma, o
-  el pegado «vertical» de la pantalla de Séneca con un valor por línea). Se
-  detecta el formato solo y las columnas por sus encabezados («Empleado/a»,
-  «Cuenta Google/Microsoft», «Puesto», «Teléfono», «Móvil»…) o, si no los hay,
-  por su contenido; del teléfono se prioriza el móvil (empieza por 6 o 7) y se
-  descartan duplicados.
+  subiendo el Excel o CSV de Séneca, o pegando (celdas de una hoja de cálculo con
+  tabuladores, CSV con comas —respetando comillas— o punto y coma, o el pegado
+  «vertical» de la pantalla de Séneca con un valor por línea). Se detecta el
+  formato solo y las columnas por sus encabezados («Empleado/a», «Cuenta
+  Google/Microsoft», «Puesto», «Teléfono», «Móvil»…) o, si no los hay, por su
+  contenido; del teléfono se prioriza el móvil (empieza por 6 o 7) y se descartan
+  duplicados.
 
 En el primer uso, el admin entra directamente en «Configuración» (con aviso de
 pendiente). El correo del usuario se resuelve con `getEffectiveUser` como

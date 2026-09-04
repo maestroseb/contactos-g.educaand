@@ -77,7 +77,7 @@ window.TABS.contactosCentro = {
     cont.querySelector('#bImport').onclick = function(){
       modalPegar({
         titulo: 'Importar desde Séneca',
-        desc: 'Sube el Excel/CSV o el PDF exportado de Séneca, o pega el listado (celdas de una hoja de cálculo, CSV con comas o punto y coma, o directamente de la pantalla de Séneca). Se detecta el formato solo y las columnas por su encabezado (Empleado/a, Cuenta Google/Microsoft, Puesto, Teléfono, Móvil…) o, si no hay, por su contenido; del teléfono se prioriza el móvil. Se añade a la lista; luego pulsa «Guardar claustro».',
+        desc: 'Sube el Excel o CSV exportado de Séneca, o pega el listado (celdas de una hoja de cálculo, CSV con comas o punto y coma, o directamente de la pantalla de Séneca). Se detecta el formato solo y las columnas por su encabezado (Empleado/a, Cuenta Google/Microsoft, Puesto, Teléfono, Móvil…) o, si no hay, por su contenido; del teléfono se prioriza el móvil. Se añade a la lista; luego pulsa «Guardar claustro».',
         placeholder: 'Apellidos, Nombre\tcorreo@…\tPuesto',
         aceptar: 'Añadir a la lista',
         onAceptar: function(texto, ctx){
