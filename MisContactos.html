@@ -151,7 +151,7 @@ window.TABS.misContactos = {
     cont.querySelector('#bImport').onclick = function(){
       modalPegar({
         titulo: 'Importar contactos',
-        desc: 'Pega un listado (columnas separadas por tabulador). Detecta el correo, el nombre («Apellidos, Nombre») y el puesto. Se añaden a tu tabla; luego pulsa «Guardar cambios».',
+        desc: 'Sube un Excel/CSV o un PDF (p. ej. el listado de personal de Séneca) o pega el listado incluyendo la fila de encabezados. Se detectan las columnas por su nombre (Empleado/a, Cuenta Google/Microsoft, Puesto, Teléfono…) y, si no hay encabezados, por su contenido. Se añaden a tu tabla; luego pulsa «Guardar cambios».',
         placeholder: 'Apellidos, Nombre\tcorreo@…\tPuesto',
         aceptar: 'Añadir a la tabla',
         onAceptar: function(texto, ctx){

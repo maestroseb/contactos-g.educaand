@@ -76,8 +76,226 @@ function resumenTexto(r){
     (r.errores?', '+r.errores+' con error':'')+'.';
 }
 
+/* ===================== Importar desde archivo (Excel/PDF) ===================== */
+/* Se cargan bajo demanda desde CDN solo al subir un archivo. */
+var URL_XLSX = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+var URL_PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+var URL_PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+var _scriptsCargados = {};
+
+/** Inyecta un <script> externo una sola vez y avisa por callback(err). */
+function cargarScript_(url, cb){
+  if(_scriptsCargados[url] === 'ok') return cb(null);
+  var s = document.createElement('script');
+  s.src = url; s.async = true;
+  s.onload = function(){ _scriptsCargados[url] = 'ok'; cb(null); };
+  s.onerror = function(){ cb(new Error('No se pudo cargar '+url)); };
+  document.head.appendChild(s);
+}
+
+/** Convierte una matriz (filas × columnas) en texto TSV saneado. */
+function matrizATsv_(matriz){
+  return (matriz || [])
+    .map(function(fila){
+      return (fila || []).map(function(celda){
+        return String(celda == null ? '' : celda).replace(/[\t\r\n]+/g, ' ').trim();
+      }).join('\t');
+    })
+    .filter(function(l){ return l.replace(/\t/g, '').trim() !== ''; })
+    .join('\n');
+}
+
+/** Extrae la 1ª <table> de un fragmento HTML del portapapeles como matriz. */
+function htmlTablaAMatriz_(html){
+  var doc;
+  try { doc = new DOMParser().parseFromString(html, 'text/html'); } catch(e){ return null; }
+  var tabla = doc.querySelector('table');
+  if(!tabla) return null;
+  var filas = [];
+  Array.prototype.forEach.call(tabla.querySelectorAll('tr'), function(tr){
+    var celdas = Array.prototype.map.call(tr.querySelectorAll('th,td'), function(td){
+      return (td.textContent || '').replace(/\s+/g, ' ').trim();
+    });
+    if(celdas.length) filas.push(celdas);
+  });
+  return filas.length ? filas : null;
+}
+
+/** Vuelca una matriz en el textarea del modal y avisa del resultado. */
+function volcarMatrizEnTa_(matriz, ta, st){
+  var tsv = matrizATsv_(matriz);
+  if(!tsv){ setStatus(st, 'No se han encontrado filas legibles en el archivo.', 'err'); return; }
+  ta.value = tsv;
+  var n = tsv.split('\n').length;
+  setStatus(st, 'Detectadas '+n+' fila(s). Revisa el contenido y pulsa el botón de añadir.', 'ok');
+}
+
+/** Lee un archivo (Excel/CSV o PDF) y devuelve una matriz por callback. */
+function extraerArchivo_(file, onOk, onErr, onProg){
+  var nombre = (file.name || '').toLowerCase();
+  if(/\.pdf$/.test(nombre) || file.type === 'application/pdf') return extraerPdf_(file, onOk, onErr, onProg);
+  return extraerExcel_(file, onOk, onErr, onProg);
+}
+
+/** Excel (.xls/.xlsx) y CSV/TSV mediante SheetJS. */
+function extraerExcel_(file, onOk, onErr, onProg){
+  if(onProg) onProg('Cargando el lector de hojas de cálculo…');
+  cargarScript_(URL_XLSX, function(err){
+    if(err || !window.XLSX) return onErr('No se pudo cargar el lector de Excel. Revisa tu conexión.');
+    var fr = new FileReader();
+    fr.onload = function(){
+      try {
+        var wb = XLSX.read(new Uint8Array(fr.result), { type: 'array' });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var matriz = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+        onOk(matriz);
+      } catch(e){ onErr('No se pudo leer el archivo: '+(e && e.message ? e.message : e)); }
+    };
+    fr.onerror = function(){ onErr('No se pudo leer el archivo.'); };
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+/** PDF mediante pdf.js: reconstruye la tabla por posición (best-effort). */
+function extraerPdf_(file, onOk, onErr, onProg){
+  if(onProg) onProg('Cargando el lector de PDF…');
+  cargarScript_(URL_PDFJS, function(err){
+    if(err || !window.pdfjsLib) return onErr('No se pudo cargar el lector de PDF. Revisa tu conexión.');
+    try { pdfjsLib.GlobalWorkerOptions.workerSrc = URL_PDFJS_WORKER; } catch(e){}
+    var fr = new FileReader();
+    fr.onload = function(){
+      pdfjsLib.getDocument({ data: new Uint8Array(fr.result) }).promise.then(function(pdf){
+        var items = [];
+        var cadena = Promise.resolve();
+        var _loop = function(p){
+          cadena = cadena.then(function(){
+            if(onProg) onProg('Leyendo el PDF… página '+p+' de '+pdf.numPages);
+            return pdf.getPage(p).then(function(page){
+              var vp = page.getViewport({ scale: 1 });
+              return page.getTextContent().then(function(tc){
+                tc.items.forEach(function(it){
+                  if(!it.str || !it.str.trim()) return;
+                  items.push({ str: it.str, x: it.transform[4], y: (vp.height - it.transform[5]) + (p-1)*100000 });
+                });
+              });
+            });
+          });
+        };
+        for(var p = 1; p <= pdf.numPages; p++) _loop(p);
+        cadena.then(function(){
+          try { onOk(reconstruirTablaPdf_(items)); }
+          catch(e){ onErr('No se pudo interpretar la tabla del PDF: '+(e && e.message ? e.message : e)); }
+        }).catch(function(e){ onErr('Error leyendo el PDF: '+(e && e.message ? e.message : e)); });
+      }).catch(function(e){ onErr('No se pudo abrir el PDF: '+(e && e.message ? e.message : e)); });
+    };
+    fr.onerror = function(){ onErr('No se pudo leer el archivo.'); };
+    fr.readAsArrayBuffer(file);
+  });
+}
+
 /**
- * Abre un modal con un área de texto para pegar (importaciones puntuales).
+ * Reconstruye una tabla a partir de los fragmentos de texto de un PDF usando su
+ * posición: agrupa columnas por la x (borde izquierdo, que en una tabla real
+ * comparten todas las celdas de una columna) y separa registros por la y de una
+ * columna «ancla» de una sola línea (fechas, DNI o el «No/Sí»). Es best-effort:
+ * el resultado se muestra en el textarea para que el usuario lo revise.
+ */
+function reconstruirTablaPdf_(items){
+  if(!items.length) return [];
+  var COLGAP = 14, TOLX = 6, MINCOL = 3;
+
+  // Columnas: agrupamos las x de todos los fragmentos.
+  var xs = items.map(function(i){ return i.x; }).sort(function(a,b){ return a-b; });
+  var clusters = [];
+  xs.forEach(function(x){
+    var last = clusters[clusters.length-1];
+    if(!last || x - last.max > COLGAP) clusters.push({ min:x, max:x, n:1 });
+    else { last.max = x; last.n++; }
+  });
+  var cols = clusters.filter(function(c){ return c.n >= MINCOL; }).map(function(c){ return c.min; });
+  if(!cols.length) cols = [xs[0]];
+  function colDe(x){ var idx = 0; for(var k=0;k<cols.length;k++){ if(x >= cols[k]-TOLX) idx = k; else break; } return idx; }
+
+  var porCol = cols.map(function(){ return []; });
+  items.forEach(function(it){ porCol[colDe(it.x)].push(it); });
+
+  // Columna ancla (1 valor por registro): fechas > DNI > coordinador. Se elige
+  // por el nº de valores de ese tipo (no proporción: así las palabras de la
+  // cabecera que caen en la misma columna no despistan la elección).
+  var esFecha = function(s){ return /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(String(s).trim()); };
+  var esDni = function(s){ return /^\d{7,8}\s*[a-zA-Z]$/.test(String(s).trim()); };
+  var esSiNo = function(s){ return /^(no|si|sí)$/i.test(String(s).trim()); };
+
+  var anclaIdx = -1, anclaTest = null, mejor = 0;
+  cols.forEach(function(_, k){
+    var arr = porCol[k], cntF = 0, cntD = 0, cntS = 0;
+    arr.forEach(function(it){ if(esFecha(it.str)) cntF++; else if(esDni(it.str)) cntD++; else if(esSiNo(it.str)) cntS++; });
+    var score = 0, test = null;
+    if(cntF > 0){ score = 3e6 + cntF; test = esFecha; }
+    else if(cntD > 0){ score = 2e6 + cntD; test = esDni; }
+    else if(cntS > 0){ score = 1e6 + cntS; test = esSiNo; }
+    if(score > mejor){ mejor = score; anclaIdx = k; anclaTest = test; }
+  });
+
+  if(anclaIdx < 0) return porLineas_(items, colDe, cols.length);
+
+  // Baselines = solo los valores del tipo ancla (excluye la palabra de cabecera).
+  var baselines = porCol[anclaIdx].filter(function(it){ return anclaTest(it.str); })
+    .map(function(it){ return it.y; }).sort(function(a,b){ return a-b; });
+  var fus = [];
+  baselines.forEach(function(y){ if(!fus.length || y - fus[fus.length-1] > 6) fus.push(y); });
+  baselines = fus;
+  if(!baselines.length) return porLineas_(items, colDe, cols.length);
+
+  var bordes = [];
+  for(var i=0;i<baselines.length-1;i++) bordes.push((baselines[i]+baselines[i+1])/2);
+  function registroDe(y){ var r = 0; for(var i=0;i<bordes.length;i++){ if(y > bordes[i]) r = i+1; } return r; }
+
+  var alturaFila = baselines.length > 1 ? (baselines[1]-baselines[0]) : 18;
+  var yHeadMax = baselines[0] - 0.4*alturaFila;
+  var yHeadMin = baselines[0] - 2.6*alturaFila;
+
+  var cabCeldas = cols.map(function(){ return []; });
+  var filas = {};
+  items.forEach(function(it){
+    var c = colDe(it.x);
+    if(it.y < baselines[0] - 0.5*alturaFila){
+      if(it.y >= yHeadMin && it.y <= yHeadMax) cabCeldas[c].push(it);   // candidato a cabecera (descarta el título)
+      return;
+    }
+    var r = registroDe(it.y);
+    (filas[r] = filas[r] || cols.map(function(){ return []; }))[c].push(it);
+  });
+
+  function une(arr){
+    return arr.sort(function(a,b){ return (a.y-b.y) || (a.x-b.x); })
+              .map(function(it){ return it.str.trim(); }).join(' ').replace(/\s+/g, ' ').trim();
+  }
+
+  var matriz = [];
+  var cab = cabCeldas.map(une);
+  if(cab.some(Boolean)) matriz.push(cab);
+  Object.keys(filas).map(Number).sort(function(a,b){ return a-b; }).forEach(function(r){
+    matriz.push(filas[r].map(une));
+  });
+  return matriz;
+}
+
+/** Reserva: cada línea física del PDF se toma como una fila. */
+function porLineas_(items, colDe, ncols){
+  var lineas = {};
+  items.forEach(function(it){ var y = Math.round(it.y/4)*4; (lineas[y] = lineas[y] || []).push(it); });
+  return Object.keys(lineas).map(Number).sort(function(a,b){ return a-b; }).map(function(y){
+    var fila = []; for(var k=0;k<ncols;k++) fila[k] = '';
+    lineas[y].forEach(function(it){ var c = colDe(it.x); fila[c] = (fila[c] ? fila[c]+' ' : '') + it.str.trim(); });
+    return fila;
+  });
+}
+
+/**
+ * Abre un modal con un área de texto para pegar (importaciones puntuales) y un
+ * botón para subir un Excel/CSV o PDF. También intercepta el pegado de una tabla
+ * HTML (p. ej. copiada de Séneca) y la convierte a columnas.
  * cfg = { titulo, desc, placeholder, aceptar, onAceptar(texto, ctx) }
  *   ctx = { cerrar(), st (elemento de estado), btn (botón aceptar) }
  * Devuelve { cerrar }.
@@ -91,6 +309,11 @@ function modalPegar(cfg){
       '<div class="modal-head"><h3>'+icon('importar')+esc(cfg.titulo||'Importar')+'</h3>'+
         '<button class="btn ghost sm icononly modal-x" title="Cerrar">'+icon('cerrar')+'</button></div>'+
       (cfg.desc?'<p class="desc">'+esc(cfg.desc)+'</p>':'')+
+      '<div class="modal-import">'+
+        '<button class="btn ghost sm modal-upload" type="button">'+icon('subir')+'Subir Excel o PDF…</button>'+
+        '<input type="file" class="modal-file" accept=".xls,.xlsx,.csv,.tsv,.pdf,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>'+
+        '<span class="modal-import-hint muted">o pega el listado abajo (incluida la fila de encabezados). También puedes arrastrar el archivo aquí.</span>'+
+      '</div>'+
       '<textarea class="modal-ta" rows="8" placeholder="'+esc(cfg.placeholder||'')+'" '+
         'style="font-family:var(--mono);font-size:12.5px"></textarea>'+
       '<p class="status modal-st"></p>'+
@@ -101,6 +324,8 @@ function modalPegar(cfg){
     '</div>';
   document.body.appendChild(ov);
   var ta = ov.querySelector('.modal-ta'), st = ov.querySelector('.modal-st');
+  var caja = ov.querySelector('.modal');
+  var fileInput = ov.querySelector('.modal-file'), upBtn = ov.querySelector('.modal-upload');
   function cerrar(){ if(ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); }
   function onKey(e){ if(e.key==='Escape') cerrar(); }
   document.addEventListener('keydown', onKey);
@@ -110,6 +335,40 @@ function modalPegar(cfg){
   ov.querySelector('.modal-ok').onclick = function(){
     if(cfg.onAceptar) cfg.onAceptar(ta.value, { cerrar: cerrar, st: st, btn: this });
   };
+
+  // Subir un archivo (Excel/CSV o PDF): se extrae y se vuelca al textarea.
+  function procesar(file){
+    if(!file) return;
+    setStatus(st, 'Leyendo «'+file.name+'»…', 'busy');
+    extraerArchivo_(file,
+      function(matriz){ volcarMatrizEnTa_(matriz, ta, st); },
+      function(msg){ setStatus(st, msg, 'err'); },
+      function(txt){ setStatus(st, txt, 'busy'); });
+  }
+  upBtn.onclick = function(){ fileInput.value = ''; fileInput.click(); };
+  fileInput.onchange = function(){ procesar(fileInput.files && fileInput.files[0]); };
+
+  // Arrastrar y soltar el archivo sobre el modal.
+  ['dragenter','dragover'].forEach(function(ev){
+    caja.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); caja.classList.add('dragging'); });
+  });
+  ['dragleave','dragend'].forEach(function(ev){
+    caja.addEventListener(ev, function(e){ e.preventDefault(); caja.classList.remove('dragging'); });
+  });
+  caja.addEventListener('drop', function(e){
+    e.preventDefault(); e.stopPropagation(); caja.classList.remove('dragging');
+    procesar(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+  });
+
+  // Pegar una tabla HTML (copiada de Séneca): se convierte a columnas por tabulador.
+  ta.addEventListener('paste', function(e){
+    var cd = e.clipboardData || window.clipboardData; if(!cd) return;
+    var html = ''; try { html = cd.getData('text/html'); } catch(err){}
+    if(!html) return;
+    var m = htmlTablaAMatriz_(html);
+    if(m){ e.preventDefault(); volcarMatrizEnTa_(m, ta, st); }
+  });
+
   setTimeout(function(){ ta.focus(); }, 30);
   return { cerrar: cerrar };
 }
