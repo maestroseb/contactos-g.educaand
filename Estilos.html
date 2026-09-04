@@ -164,7 +164,16 @@
   .pal-lbl{font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint); min-width:104px; padding-top:4px}
   .pal-chips{display:flex; gap:6px; flex-wrap:wrap; flex:1}
   .pal-tools{display:flex; gap:8px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:10px}
-  .pal-tools input{max-width:190px}
+  .pal-search{position:relative; flex:none}
+  .pal-search > input{width:230px; max-width:100%}
+  .pal-ac{position:absolute; top:calc(100% + 4px); left:0; z-index:30; min-width:230px; max-width:300px;
+    max-height:264px; overflow:auto; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--r); box-shadow:var(--sh-lg); padding:4px}
+  .pal-ac-item{display:flex; align-items:center; gap:6px; width:100%; text-align:left; padding:5px 8px;
+    border-radius:8px; cursor:pointer; font-size:13px; color:var(--ink-soft)}
+  .pal-ac-item:hover, .pal-ac-item.activo{background:var(--surface-2)}
+  .pal-ac-crear{color:var(--primary); font-weight:600}
+  .pal-ac-crear .ico{width:15px; height:15px}
   .assign-banner{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13.5px; color:var(--ink-soft); width:100%}
   .assign-banner b{color:var(--ink)}
   /* Celda de etiquetas de la rejilla */
