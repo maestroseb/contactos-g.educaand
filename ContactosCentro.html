@@ -36,6 +36,29 @@ window.TABS.contactosCentro = {
     var zona = cont.querySelector('#gridZona');
     var filasInicial = null;   // instantánea para detectar cambios (y reversiones)
 
+    // Pegar en bloque tipo hoja de cálculo (p. ej. una columna de teléfonos). Se
+    // engancha una sola vez sobre la zona (persiste entre repintados de la rejilla)
+    // y escribe directamente en el modelo FILAS, creando filas si hacen falta.
+    var COLS_TXT = ['nombre','apellidos','email','telefono','puesto'];
+    zona.addEventListener('paste', function(e){
+      var inp = e.target;
+      if(!inp || inp.tagName !== 'INPUT' || !inp.getAttribute('data-k')) return;
+      var startCol = COLS_TXT.indexOf(inp.getAttribute('data-k')); if(startCol < 0) return;
+      var texto = (e.clipboardData || window.clipboardData).getData('text');
+      if(!texto || (texto.indexOf('\t') === -1 && texto.indexOf('\n') === -1)) return; // valor simple → pegado normal
+      e.preventDefault();
+      var id = inp.closest('tr').getAttribute('data-id');
+      var startRow = FILAS.map(function(f){ return f.id; }).indexOf(id); if(startRow < 0) return;
+      var lineas = texto.replace(/\r/g,'').split('\n');
+      if(lineas.length && lineas[lineas.length-1] === '') lineas.pop();
+      lineas.forEach(function(linea, r){
+        while(FILAS.length <= startRow + r) FILAS.push(filaVacia());
+        var f = FILAS[startRow + r];
+        linea.split('\t').forEach(function(val, c){ var campo = COLS_TXT[startCol + c]; if(campo) f[campo] = val.trim(); });
+      });
+      renderGrid(); revisarClaustro();
+    });
+
     // Serializa lo que se guardaría; si coincide con lo cargado, no hay cambios.
     function serializarFilas(){
       return JSON.stringify(FILAS.map(paraGuardar).filter(function(f){ return f.email||f.nombre; }));
@@ -62,7 +85,21 @@ window.TABS.contactosCentro = {
       var filas = FILAS.map(paraGuardar).filter(function(f){ return f.email||f.nombre; });
       correr(this, cont.querySelector('#sAdmin'), 'Guardando…',
         function(r){ r.adminGuardarContactos(filas); },
-        function(n, st){ filasInicial = serializarFilas(); revisarClaustro(); setStatus(st, 'Guardado: '+n+' personas en el claustro.', 'ok'); });
+        function(res, st){
+          filasInicial = serializarFilas(); revisarClaustro();
+          var n = (res && typeof res === 'object') ? res.n : res;
+          var msg = 'Guardado: '+n+' personas en el claustro.';
+          // El servidor sincroniza las etiquetas y los puestos nuevos con Configuración.
+          if(res && res.cambioCfg){
+            cats = res.etiquetas || cats;
+            ESTADO.etiquetasCats = cats;
+            ESTADO.etiquetasSugeridas = [].concat(cats.grupo||[], cats.departamentos||[], cats.cargos||[], cats.otros||[]);
+            pintarPaleta();
+            if(typeof invalidarTab==='function') invalidarTab('configuracion');
+            msg += ' Etiquetas y especialidades sincronizadas con Configuración.';
+          }
+          setStatus(st, msg, 'ok');
+        });
     };
     cont.querySelector('#bVaciar').onclick = function(){
       var btn = this;
@@ -294,7 +331,7 @@ window.TABS.contactosCentro = {
           return '<tr data-id="'+f.id+'"'+(SEL.has(f.id)?' class="marcada"':'')+'>'+
             '<td class="sel-col"><input type="checkbox" class="sel"'+(SEL.has(f.id)?' checked':'')+'></td>'+
             celdaTxt(f,'nombre')+celdaTxt(f,'apellidos')+celdaTxt(f,'email')+celdaTxt(f,'telefono')+celdaTxt(f,'puesto')+
-            '<td class="etqs"><div class="etq-cell">'+chipsDe(f)+'</div></td>'+
+            '<td class="etqs"></td>'+
             '<td class="act"><button class="btn danger sm icononly bdel" title="Quitar fila">'+icon('borrar')+'</button></td>'+
           '</tr>';
         }).join('')+'</tbody></table></div>';
@@ -306,19 +343,35 @@ window.TABS.contactosCentro = {
         if(inp.getAttribute('data-k')==='puesto') armarChipInput(inp);
         inp.oninput = function(){ var f=fila(inp); if(f) f[inp.getAttribute('data-k')] = inp.value; revisarClaustro(); };
       });
-      // selección
+      // selección: marcar/desmarcar todas actúa in situ (sin repintar) para que
+      // «desmarcar todas» funcione y la casilla de cabecera refleje el estado real.
       var selall = zona.querySelector('.selall');
-      selall.onchange = function(){ FILAS.forEach(function(f){ selall.checked?SEL.add(f.id):SEL.delete(f.id); }); renderGrid(); };
+      function sincronizarSelAll(){
+        var total = FILAS.length, marcadas = FILAS.filter(function(f){ return SEL.has(f.id); }).length;
+        selall.checked = total > 0 && marcadas === total;
+        selall.indeterminate = marcadas > 0 && marcadas < total;
+      }
+      selall.onchange = function(){
+        var check = selall.checked;
+        FILAS.forEach(function(f){ check ? SEL.add(f.id) : SEL.delete(f.id); });
+        Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
+          var c = tr.querySelector('.sel'); if(c) c.checked = check; tr.classList.toggle('marcada', check);
+        });
+        selall.indeterminate = false;
+      };
       Array.prototype.forEach.call(zona.querySelectorAll('.sel'), function(c){
-        c.onchange = function(e){ e.stopPropagation(); var id=c.closest('tr').getAttribute('data-id'); c.checked?SEL.add(id):SEL.delete(id); c.closest('tr').classList.toggle('marcada', c.checked); };
+        c.onchange = function(e){ e.stopPropagation(); var id=c.closest('tr').getAttribute('data-id'); c.checked?SEL.add(id):SEL.delete(id); c.closest('tr').classList.toggle('marcada', c.checked); sincronizarSelAll(); };
       });
+      sincronizarSelAll();
       // quitar fila
       Array.prototype.forEach.call(zona.querySelectorAll('.bdel'), function(b){
         b.onclick = function(e){ e.stopPropagation(); var id=b.closest('tr').getAttribute('data-id'); FILAS=FILAS.filter(function(f){return f.id!==id;}); SEL.delete(id); renderGrid(); };
       });
-      // quitar etiqueta (x del chip)
-      Array.prototype.forEach.call(zona.querySelectorAll('.chip .x'), function(x){
-        x.onclick = function(e){ e.stopPropagation(); var f=fila(x); if(f){ toggleTag(f, x.getAttribute('data-x'), false); renderGrid(); } };
+      // editor de etiquetas por celda (chips + añadir con autocompletado tipo Notion)
+      Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
+        var f = filaId(tr.getAttribute('data-id')); if(!f) return;
+        var ed = chipCellEditor(tr.querySelector('.etqs'), f.grupos, revisarClaustro, { sugerencias: todasLasEtiquetas_ });
+        tr._chipRender = ed.render;   // para repintar la celda tras «pintar» arrastrando
       });
       // pinchar (y arrastrar) para asignar/quitar la etiqueta armada
       Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
@@ -380,22 +433,13 @@ window.TABS.contactosCentro = {
       pintarCelda(tr, f);
     }
     function pintarCelda(tr, f){
-      var cell = tr.querySelector('.etq-cell'); if(!cell) return;
-      cell.innerHTML = chipsDe(f);
-      Array.prototype.forEach.call(cell.querySelectorAll('.chip .x'), function(x){
-        x.onclick = function(e){ e.stopPropagation(); toggleTag(f, x.getAttribute('data-x'), false); pintarCelda(tr, f); };
-      });
+      // El editor de la celda comparte el array f.grupos (mutado por toggleTag),
+      // así que basta con pedirle que se repinte.
+      if(tr._chipRender) tr._chipRender();
     }
     function tieneTag(f, tag){ return (f.grupos||[]).some(function(x){ return x.toLowerCase()===tag.toLowerCase(); }); }
     function filaId(id){ return FILAS.filter(function(x){ return x.id===id; })[0]; }
 
-    function chipsDe(f){
-      var g = (f.grupos||[]).filter(Boolean);
-      if(!g.length) return '<span class="vacio">—</span>';
-      return g.map(function(t){
-        return '<span class="chip" style="--h:'+hue(t)+'">'+esc(t)+'<span class="x" data-x="'+esc(t)+'">'+cerrarSvg()+'</span></span>';
-      }).join('');
-    }
     function celdaTxt(f,k){
       var v = f[k]||'';
       if(k==='puesto'){

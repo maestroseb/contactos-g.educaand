@@ -47,6 +47,20 @@ window.TABS.misContactos = {
 
     var sMis = cont.querySelector('#sMis'), sPropios = cont.querySelector('#sPropios');
 
+    /** Etiquetas conocidas para autocompletar: las configuradas en el centro más
+     *  las que ya se usan en cualquiera de las dos rejillas de esta pestaña. */
+    function sugerenciasEtq(){
+      var set = {};
+      (estado.etiquetasSugeridas || []).forEach(function(t){ if(t) set[t] = true; });
+      MIS.forEach(function(r){ (r.grupos || []).forEach(function(t){ if(t) set[t] = true; }); });
+      if(tb) Array.prototype.forEach.call(tb.querySelectorAll('tr'), function(tr){ (tr._grupos || []).forEach(function(t){ if(t) set[t] = true; }); });
+      return Object.keys(set).sort(function(a,b){ return a.localeCompare(b, 'es'); });
+    }
+
+    // Pegar en bloque tipo hoja de cálculo sobre la rejilla de Google (rellena las
+    // filas visibles; no crea contactos nuevos). Se engancha una vez sobre la zona.
+    habilitarPegado(cont.querySelector('#misZona'), null);
+
     /* ===================== Contactos de Google ===================== */
     function norm(c){
       return { id:'m'+(seq++), resourceName:c.resourceName, etag:c.etag,
@@ -125,7 +139,7 @@ window.TABS.misContactos = {
           inp.oninput = function(){ r[k] = inp.value; revisar(); };
         });
         tr.querySelector('.bdel').onclick = function(){ MIS = MIS.filter(function(x){ return x.id!==r.id; }); pintarFiltro(); pintarTabla(); revisar(); };
-        chipCellEditor(tr.querySelector('.etqs'), r.grupos, function(){ pintarFiltro(); revisar(); });
+        chipCellEditor(tr.querySelector('.etqs'), r.grupos, function(){ pintarFiltro(); revisar(); }, { sugerencias: sugerenciasEtq });
       });
     }
 
@@ -143,19 +157,19 @@ window.TABS.misContactos = {
 
     /* ===================== Contactos propios ===================== */
     tb = cont.querySelector('#tPropios tbody');
-    (estado.contactosPropios||[]).forEach(function(c){ filaPropio(tb, c, revisar); });
-    if(!tb.children.length) filaPropio(tb, {}, revisar);
-    habilitarPegado(tb, function(t,o){ filaPropio(t, o, revisar); });
+    (estado.contactosPropios||[]).forEach(function(c){ filaPropio(tb, c, revisar, sugerenciasEtq); });
+    if(!tb.children.length) filaPropio(tb, {}, revisar, sugerenciasEtq);
+    habilitarPegado(tb, function(t,o){ filaPropio(t, o, revisar, sugerenciasEtq); });
     tb.addEventListener('input', revisar);
     tb.addEventListener('paste', function(){ setTimeout(revisar, 0); });
     propiosInicial = JSON.stringify(leerPropios(tb));
 
-    cont.querySelector('#bAdd').onclick = function(){ filaPropio(tb, {}, revisar); revisar(); };
+    cont.querySelector('#bAdd').onclick = function(){ filaPropio(tb, {}, revisar, sugerenciasEtq); revisar(); };
     cont.querySelector('#bVaciarPropios').onclick = function(){
       modalConfirmar({ titulo:'Vaciar contactos propios', icono:'borrar', peligro:true, aceptar:'Vaciar',
         mensaje:'¿Vaciar TODA tu lista de contactos propios?\n\nSe quitarán de la tabla; el cambio se aplicará al pulsar «Guardar cambios».',
         onAceptar:function(){
-          tb.innerHTML = ''; filaPropio(tb, {}, revisar); revisar();
+          tb.innerHTML = ''; filaPropio(tb, {}, revisar, sugerenciasEtq); revisar();
           setStatus(sPropios, 'Lista vaciada. Pulsa «Guardar cambios» para aplicarlo.', 'ok');
         }});
     };
@@ -171,7 +185,7 @@ window.TABS.misContactos = {
           google.script.run
             .withSuccessHandler(function(lista){
               if(tb.children.length===1){ var v=leerPropios(tb); if(!v.length) tb.innerHTML=''; }
-              (lista||[]).forEach(function(c){ filaPropio(tb, c, revisar); });
+              (lista||[]).forEach(function(c){ filaPropio(tb, c, revisar, sugerenciasEtq); });
               revisar(); ctx.cerrar();
               setStatus(sPropios, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar cambios».', 'ok');
             })
@@ -236,8 +250,9 @@ window.TABS.misContactos = {
   }
 };
 
-/** Construye una fila editable de contacto propio (con etiquetas como chips). */
-function filaPropio(tb, c, onChange){
+/** Construye una fila editable de contacto propio (con etiquetas como chips y
+ *  autocompletado si se pasa `sugerencias`). */
+function filaPropio(tb, c, onChange, sugerencias){
   var tr = document.createElement('tr');
   tr._grupos = (c.grupos||[]).slice();
   var pv = c.puesto || '';
@@ -253,7 +268,7 @@ function filaPropio(tb, c, onChange){
   armarChipInput(puestoInp);
   puestoInp.addEventListener('input', function(){ if(onChange) onChange(); });
   tr.querySelector('.act button').onclick = function(){ tr.remove(); if(onChange) onChange(); };
-  chipCellEditor(tr.querySelector('.etqs'), tr._grupos, onChange);
+  chipCellEditor(tr.querySelector('.etqs'), tr._grupos, onChange, sugerencias ? { sugerencias: sugerencias } : null);
   tb.appendChild(tr);
 }
 function leerPropios(tb){
