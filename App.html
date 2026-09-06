@@ -6,12 +6,22 @@ function hue(s){ var h=0; s=String(s); for(var i=0;i<s.length;i++) h=(h*31 + s.c
 /** SVG de la «x» de un chip. */
 function cerrarSvg(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'; }
 
+/** Normaliza para comparar/buscar sin acentos ni mayúsculas. */
+function normEtq_(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
 /**
- * Editor de etiquetas dentro de una celda: chips con «x» para quitar y un «+»
- * para añadir (escribe y Enter). Muta el array `grupos` en el sitio y avisa por
- * onChange en cada cambio.
+ * Editor de etiquetas dentro de una celda (estilo Notion): chips con «x» para
+ * quitar y un «+» para añadir. Al escribir, autocompleta con las etiquetas ya
+ * conocidas (las que devuelve opts.sugerencias) y, si lo tecleado no coincide con
+ * ninguna, ofrece «Crear «X»». Enter/clic añade la resaltada (y deja el campo
+ * abierto para encadenar varias); salir o Escape cierra. Muta el array `grupos`
+ * en el sitio y avisa por onChange en cada cambio.
+ *   opts = { sugerencias: fn()->[etiquetas conocidas] }
+ * Devuelve { render } por si hay que repintar desde fuera (p. ej. al «pintar»).
  */
-function chipCellEditor(td, grupos, onChange){
+function chipCellEditor(td, grupos, onChange, opts){
+  opts = opts || {};
+  var sugerir = opts.sugerencias || function(){ return []; };
   function existe(t){ return grupos.map(function(g){return g.toLowerCase();}).indexOf(t.toLowerCase()) !== -1; }
   function render(){
     td.innerHTML = '<div class="etq-cell">'+
@@ -21,19 +31,59 @@ function chipCellEditor(td, grupos, onChange){
       x.onclick = function(e){ e.stopPropagation(); var t=x.getAttribute('data-x'); var i=grupos.map(function(g){return g.toLowerCase();}).indexOf(t.toLowerCase());
         if(i>=0){ grupos.splice(i,1); render(); if(onChange) onChange(); } };
     });
-    td.querySelector('.chipadd').onclick = abrir;
+    td.querySelector('.chipadd').onclick = function(e){ e.stopPropagation(); abrir(); };
   }
   function abrir(){
     var box = td.querySelector('.etq-cell'), add = box.querySelector('.chipadd');
-    var inp = document.createElement('input'); inp.className='chip-new'; inp.placeholder='Etiqueta…';
+    var inp = document.createElement('input'); inp.className='chip-new'; inp.placeholder='Etiqueta…'; inp.setAttribute('autocomplete','off');
     box.insertBefore(inp, add); inp.focus();
-    var done=false;
-    function commit(){ if(done) return; done=true; var v=inp.value.trim();
-      if(v && !existe(v)){ grupos.push(v); } render(); if(onChange) onChange(); }
-    inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); commit(); } else if(e.key==='Escape'){ done=true; render(); } });
-    inp.addEventListener('blur', commit);
+
+    // Menú de autocompletado en posición fija (evita que lo recorte el overflow de la tabla).
+    var menu = document.createElement('div'); menu.className = 'pal-ac ac-fixed'; menu.hidden = true;
+    document.body.appendChild(menu);
+    var items = [], idx = -1, done = false;
+
+    function posicionar(){ var r = inp.getBoundingClientRect(); menu.style.left = r.left+'px'; menu.style.top = (r.bottom+4)+'px'; menu.style.minWidth = Math.max(180, r.width)+'px'; }
+    function cerrarMenu(){ menu.hidden = true; menu.innerHTML = ''; items = []; idx = -1; }
+    function quitarMenu(){ cerrarMenu(); if(menu.parentNode) menu.parentNode.removeChild(menu); window.removeEventListener('scroll', posicionar, true); }
+    function marcar(){ Array.prototype.forEach.call(menu.children, function(el, i){ el.classList.toggle('activo', i === idx); }); }
+    function refrescar(){
+      var q = inp.value.trim(), qn = normEtq_(q);
+      var todas = (sugerir() || []).filter(function(t){ return t && !existe(t); });
+      var lista = (qn ? todas.filter(function(t){ return normEtq_(t).indexOf(qn) !== -1; }) : todas).slice(0, 8);
+      var exacta = todas.some(function(t){ return normEtq_(t) === qn; });
+      items = lista.map(function(t){ return { tag: t }; });
+      if(q && !exacta && !existe(q)) items.push({ tag: q, crear: true });
+      if(!items.length){ cerrarMenu(); return; }
+      menu.innerHTML = items.map(function(it){
+        return it.crear
+          ? '<div class="pal-ac-item pal-ac-crear">'+icon('add')+'Crear «'+esc(it.tag)+'»</div>'
+          : '<div class="pal-ac-item"><span class="chip solo" style="--h:'+hue(it.tag)+'">'+esc(it.tag)+'</span></div>';
+      }).join('');
+      menu.hidden = false; posicionar(); idx = -1;
+      window.addEventListener('scroll', posicionar, true);
+      Array.prototype.forEach.call(menu.children, function(el, i){
+        el.onmousedown = function(e){ e.preventDefault(); };   // no perder el foco antes del clic
+        el.onclick = function(){ elegir(i); };
+      });
+    }
+    function agregar(v){ v = String(v).trim(); if(v && !existe(v)){ grupos.push(v); return true; } return false; }
+    // Añade y deja el campo listo para encadenar otra etiqueta (como Notion).
+    function elegir(i){ var it = items[i]; if(!it) return; done = true; agregar(it.tag); quitarMenu(); render(); if(onChange) onChange(); abrir(); }
+    function commit(){ if(done) return; done = true; agregar(inp.value); quitarMenu(); render(); if(onChange) onChange(); }
+
+    inp.addEventListener('input', refrescar);
+    inp.addEventListener('focus', refrescar);
+    inp.addEventListener('keydown', function(e){
+      if(e.key === 'ArrowDown'){ e.preventDefault(); if(menu.hidden) refrescar(); idx = Math.min(items.length - 1, idx + 1); marcar(); }
+      else if(e.key === 'ArrowUp'){ e.preventDefault(); idx = Math.max(0, idx - 1); marcar(); }
+      else if(e.key === 'Enter'){ e.preventDefault(); if(idx >= 0) elegir(idx); else commit(); }
+      else if(e.key === 'Escape'){ e.preventDefault(); done = true; quitarMenu(); render(); }
+    });
+    inp.addEventListener('blur', function(){ setTimeout(commit, 120); });
   }
   render();
+  return { render: render };
 }
 
 /**
@@ -290,13 +340,16 @@ var ORDEN_COLS = ['nombre','apellidos','email','telefono','puesto','grupos'];
 
 /**
  * Habilita pegar en bloque (desde Excel/Séneca) en una rejilla: al pegar en una
- * celda, reparte el texto (tabuladores = columnas, saltos = filas) creando filas
- * nuevas si hacen falta. `anadirFila(tbody, obj)` añade una fila vacía.
+ * celda, reparte el texto (tabuladores = columnas, saltos = filas) rellenando las
+ * celdas de texto (por su `data-k`, ignorando casillas de selección). Si
+ * `anadirFila(tbody, obj)` está definida, crea filas nuevas cuando hacen falta;
+ * si no, se limita a las filas existentes. Tras rellenar cada input dispara su
+ * evento `input` para que el modelo de la rejilla se entere del cambio.
  */
 function habilitarPegado(tbody, anadirFila){
   tbody.addEventListener('paste', function(e){
     var inp = e.target;
-    if(!inp || inp.tagName !== 'INPUT') return;
+    if(!inp || inp.tagName !== 'INPUT' || !inp.getAttribute('data-k')) return;
     var texto = (e.clipboardData || window.clipboardData).getData('text');
     if(!texto || (texto.indexOf('\t') === -1 && texto.indexOf('\n') === -1)) return; // valor simple → pegado normal
     e.preventDefault();
@@ -307,12 +360,13 @@ function habilitarPegado(tbody, anadirFila){
     var lineas = texto.replace(/\r/g,'').split('\n');
     if(lineas.length && lineas[lineas.length-1] === '') lineas.pop();
     lineas.forEach(function(linea, r){
-      while(tbody.querySelectorAll('tr').length <= startRow + r) anadirFila(tbody, {});
+      if(anadirFila){ while(tbody.querySelectorAll('tr').length <= startRow + r) anadirFila(tbody, {}); }
       var fila = tbody.querySelectorAll('tr')[startRow + r];
-      var inputs = fila.querySelectorAll('input');
+      if(!fila) return;   // sin creación de filas: se ignoran los sobrantes
+      var inputs = fila.querySelectorAll('input[data-k]');
       linea.split('\t').forEach(function(val, c){
         var destino = inputs[startCol + c];
-        if(destino) destino.value = val.trim();
+        if(destino){ destino.value = val.trim(); destino.dispatchEvent(new Event('input', { bubbles:true })); }
       });
     });
   });

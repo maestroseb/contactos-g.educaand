@@ -172,6 +172,8 @@
   .pal-ac-item{display:flex; align-items:center; gap:6px; width:100%; text-align:left; padding:5px 8px;
     border-radius:8px; cursor:pointer; font-size:13px; color:var(--ink-soft)}
   .pal-ac-item:hover, .pal-ac-item.activo{background:var(--surface-2)}
+  /* Menú de autocompletado en posición fija (editor de etiquetas de las celdas). */
+  .pal-ac.ac-fixed{position:fixed; top:0; left:0; z-index:90}
   .pal-ac-crear{color:var(--primary); font-weight:600}
   .pal-ac-crear .ico{width:15px; height:15px}
   .assign-banner{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13.5px; color:var(--ink-soft); width:100%}
@@ -280,7 +282,8 @@
   /* Rejilla tipo hoja de cálculo */
   table.rejilla{min-width:660px}
   /* Sin líneas verticales: separación por espaciado, aspecto más limpio. */
-  table.rejilla td{padding:0}
+  table.rejilla td{padding:0; vertical-align:middle}
+  table.rejilla th{vertical-align:middle}
   /* Solo las celdas de texto (data-k); NUNCA la casilla de selección. */
   table.rejilla td input[data-k]{border:none; border-radius:0; background:transparent; width:100%;
     min-width:120px; padding:9px 11px; font-size:13.5px; box-shadow:none}

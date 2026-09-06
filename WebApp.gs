@@ -164,10 +164,58 @@ function adminLeerContactos() {
   return leerContactosCentroStore_();
 }
 
-/** Guarda la lista de contactos del centro. */
+/** Guarda la lista de contactos del centro y sincroniza sus etiquetas y puestos
+ *  con la configuración (para que aparezcan como sugerencias en Configuración). */
 function adminGuardarContactos(lista) {
   exigirAdmin_();
-  return guardarContactosCentroStore_(lista || []);
+  lista = lista || [];
+  const n = guardarContactosCentroStore_(lista);
+  const sync = sincronizarConfigDesdeContactos_(lista);
+  return { n: n, cambioCfg: sync.cambio, etiquetas: sync.etiquetas, especialidades: sync.especialidades };
+}
+
+/** Normaliza el objeto de categorías de etiquetas a { grupo, departamentos, cargos, otros }. */
+function normalizarCats_(e) {
+  const base = { grupo: [], departamentos: [], cargos: [], otros: [] };
+  if (Array.isArray(e)) { base.grupo = e.slice(); return base; }
+  if (e && typeof e === 'object') {
+    ['grupo', 'departamentos', 'cargos', 'otros'].forEach(k => { base[k] = Array.isArray(e[k]) ? e[k].slice() : []; });
+  }
+  return base;
+}
+
+/**
+ * Vuelca en la configuración las etiquetas y puestos que aparecen en la lista del
+ * claustro y aún no están registrados: las etiquetas nuevas van a la categoría
+ * «otros» y los puestos nuevos a «especialidades». Solo actúa si el centro ya
+ * está configurado. Devuelve { cambio, etiquetas, especialidades }.
+ */
+function sincronizarConfigDesdeContactos_(lista) {
+  const cfg = getConfig_();
+  if (!cfg || !cfg.completo) {
+    return { cambio: false, etiquetas: normalizarCats_(cfg && cfg.etiquetas), especialidades: (cfg && cfg.especialidades) || [] };
+  }
+  const etiquetas = normalizarCats_(cfg.etiquetas);
+  const especialidades = (cfg.especialidades || []).slice();
+
+  const etqSet = {};
+  ['grupo', 'departamentos', 'cargos', 'otros'].forEach(k => (etiquetas[k] || []).forEach(t => { etqSet[String(t).trim().toLowerCase()] = true; }));
+  const espSet = {};
+  especialidades.forEach(e => { espSet[String(e).trim().toLowerCase()] = true; });
+
+  let cambio = false;
+  (lista || []).forEach(c => {
+    (c.grupos || []).forEach(t => {
+      const v = String(t || '').trim(); if (!v) return;
+      const key = v.toLowerCase();
+      if (!etqSet[key]) { etiquetas.otros.push(v); etqSet[key] = true; cambio = true; }
+    });
+    const p = String(c.puesto || '').trim();
+    if (p) { const pk = p.toLowerCase(); if (!espSet[pk]) { especialidades.push(p); espSet[pk] = true; cambio = true; } }
+  });
+
+  if (cambio) setConfig_(Object.assign({}, cfg, { etiquetas: etiquetas, especialidades: especialidades }));
+  return { cambio: cambio, etiquetas: etiquetas, especialidades: especialidades };
 }
 
 /** Parsea texto pegado (Séneca) y lo devuelve como contactos (sin guardar). */
