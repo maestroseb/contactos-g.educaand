@@ -14,6 +14,7 @@ const PROP_ADMINS = 'adminsExtra';     // administradores adicionales (JSON arra
 const PROP_CONFIG = 'configCentro';
 const PROP_CONTACTOS_PREFIJO = 'contactosCentro_';
 const PROP_CONTACTOS_NUM = 'contactosCentroNumTrozos';
+const PROP_BAJAS = 'bajasClaustro';    // personas retiradas del claustro (para quitarles las etiquetas al sincronizar)
 
 /* --------------------------- Caché compartida --------------------------- *
  * La configuración y la lista del claustro son globales del proyecto (iguales
@@ -204,4 +205,62 @@ function guardarContactosCentroStore_(lista) {
     catch (e) {}
   }
   return (lista || []).length;
+}
+
+/* --------------------- Bajas del claustro (tombstones) --------------------- *
+ * Cuando alguien se quita del listado del claustro se anota aquí su correo y
+ * las etiquetas que tenía. En la siguiente sincronización se le RETIRAN esas
+ * etiquetas de sus contactos de Google (sin borrar el contacto). Cada baja
+ * lleva fecha (ts) para poder podar las muy antiguas. */
+
+const MAX_BAJAS_ = 300;                     // tope de bajas guardadas (las más recientes)
+const CADUCIDAD_BAJAS_ = 180 * 24 * 3600 * 1000;  // 180 días
+
+/** Lee la lista de bajas [{email, grupos:[], ts}]. */
+function leerBajas_() {
+  const raw = PropertiesService.getScriptProperties().getProperty(PROP_BAJAS);
+  if (!raw) return [];
+  try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+
+/** Guarda la lista de bajas (podando antigüedad y tamaño). */
+function guardarBajas_(bajas) {
+  const ahora = Date.now();
+  let lista = (bajas || []).filter(b => b && b.email && (!b.ts || (ahora - b.ts) < CADUCIDAD_BAJAS_));
+  lista.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  if (lista.length > MAX_BAJAS_) lista = lista.slice(0, MAX_BAJAS_);
+  PropertiesService.getScriptProperties().setProperty(PROP_BAJAS, JSON.stringify(lista));
+}
+
+/**
+ * Actualiza el registro de bajas al guardar el claustro: compara la lista previa
+ * con la nueva; los correos que ya no están (y tenían etiquetas) se anotan como
+ * baja con sus etiquetas; los que vuelven a estar se quitan del registro.
+ */
+function registrarBajas_(previa, nueva) {
+  const enNueva = {};
+  (nueva || []).forEach(c => { const e = String(c.email || '').trim().toLowerCase(); if (e) enNueva[e] = true; });
+  const gruposPrev = {};
+  (previa || []).forEach(c => { const e = String(c.email || '').trim().toLowerCase(); if (e) gruposPrev[e] = (c.grupos || []); });
+
+  // Parte de las bajas actuales, quitando las que han vuelto al claustro.
+  let bajas = leerBajas_().filter(b => !enNueva[String(b.email || '').trim().toLowerCase()]);
+  const idx = {};
+  bajas.forEach(b => { idx[String(b.email || '').trim().toLowerCase()] = b; });
+
+  const ahora = Date.now();
+  Object.keys(gruposPrev).forEach(e => {
+    if (enNueva[e]) return;                       // sigue en el claustro: no es baja
+    const grupos = (gruposPrev[e] || []).filter(String);
+    if (!grupos.length) return;                   // no tenía etiquetas: nada que retirar
+    if (idx[e]) {
+      const set = {};
+      (idx[e].grupos || []).concat(grupos).forEach(g => { if (g) set[g] = true; });
+      idx[e].grupos = Object.keys(set); idx[e].ts = ahora;
+    } else {
+      const b = { email: e, grupos: grupos.slice(), ts: ahora };
+      bajas.push(b); idx[e] = b;
+    }
+  });
+  guardarBajas_(bajas);
 }
