@@ -336,7 +336,26 @@ function correr(btn, st, cargando, runFn, okFn){
 }
 
 /** Orden de columnas de las rejillas de contactos. */
-var ORDEN_COLS = ['nombre','apellidos','email','telefono','puesto','grupos'];
+var ORDEN_COLS = ['nombre','apellidos','alias','email','telefono','puesto','grupos'];
+
+/** ¿El texto contiene TODAS las palabras de la búsqueda? (sin acentos ni mayúsculas). */
+function coincideBusqueda(texto, q){
+  q = String(q||'').trim();
+  if(!q) return true;
+  var n = normEtq_(texto);
+  return normEtq_(q).split(/\s+/).filter(Boolean).every(function(w){ return n.indexOf(w) !== -1; });
+}
+
+/** Construye una caja de búsqueda con lupa. onInput(valor) se llama al teclear.
+ *  Devuelve el <div> contenedor (con .querySelector('input') accesible). */
+function cajaBusqueda(placeholder, onInput){
+  var box = document.createElement('div');
+  box.className = 'buscador';
+  box.innerHTML = icon('lupa')+'<input type="search" placeholder="'+esc(placeholder||'Buscar…')+'" autocomplete="off">';
+  var inp = box.querySelector('input');
+  inp.addEventListener('input', function(){ onInput(inp.value); });
+  return box;
+}
 
 /**
  * Habilita pegar en bloque (desde Excel/Séneca) en una rejilla: al pegar en una

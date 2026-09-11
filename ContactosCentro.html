@@ -23,6 +23,7 @@ window.TABS.contactosCentro = {
         '</div>',
         '<p class="desc">Elige una etiqueta abajo y <b>pincha (o arrastra arriba/abajo) sobre las personas</b> para asignársela; vuelve a pinchar para quitarla. También puedes marcar filas y aplicarla en bloque. <b>Doble clic</b> en una etiqueta para <b>renombrarla</b> en todo el claustro.</p>',
         '<div class="palette" id="paleta"></div>',
+        '<div id="buscadorZona"></div>',
         '<div id="gridZona"><p class="muted">Cargando claustro…</p></div>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir persona</button>',
@@ -35,11 +36,23 @@ window.TABS.contactosCentro = {
 
     var zona = cont.querySelector('#gridZona');
     var filasInicial = null;   // instantánea para detectar cambios (y reversiones)
+    var busqueda = '';         // texto del buscador (lupa)
+
+    // Buscador con lupa: filtra las filas en vivo (oculta las que no coinciden).
+    cont.querySelector('#buscadorZona').appendChild(
+      cajaBusqueda('Buscar por nombre, alias, correo, teléfono, puesto o etiqueta…', function(v){ busqueda = v; aplicarBusqueda(); }));
+    function textoFila(f){ return [f.nombre, f.apellidos, f.alias, f.email, f.telefono, f.puesto].concat(f.grupos||[]).join(' '); }
+    function aplicarBusqueda(){
+      Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
+        var f = filaId(tr.getAttribute('data-id'));
+        tr.hidden = !!f && !coincideBusqueda(textoFila(f), busqueda);
+      });
+    }
 
     // Pegar en bloque tipo hoja de cálculo (p. ej. una columna de teléfonos). Se
     // engancha una sola vez sobre la zona (persiste entre repintados de la rejilla)
     // y escribe directamente en el modelo FILAS, creando filas si hacen falta.
-    var COLS_TXT = ['nombre','apellidos','email','telefono','puesto'];
+    var COLS_TXT = ['nombre','apellidos','alias','email','telefono','puesto'];
     zona.addEventListener('paste', function(e){
       var inp = e.target;
       if(!inp || inp.tagName !== 'INPUT' || !inp.getAttribute('data-k')) return;
@@ -325,12 +338,12 @@ window.TABS.contactosCentro = {
     function renderGrid(){
       var html = '<div class="tablewrap"><table class="rejilla claustro'+(armado?' asignando':'')+'"><thead><tr>'+
         '<th class="sel-col"><input type="checkbox" class="selall" title="Marcar todas"></th>'+
-        '<th>Nombre</th><th>Apellidos</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas</th><th></th>'+
+        '<th>Nombre</th><th>Apellidos</th><th>Alias</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas</th><th></th>'+
         '</tr></thead><tbody>'+
         FILAS.map(function(f){
           return '<tr data-id="'+f.id+'"'+(SEL.has(f.id)?' class="marcada"':'')+'>'+
             '<td class="sel-col"><input type="checkbox" class="sel"'+(SEL.has(f.id)?' checked':'')+'></td>'+
-            celdaTxt(f,'nombre')+celdaTxt(f,'apellidos')+celdaTxt(f,'email')+celdaTxt(f,'telefono')+celdaTxt(f,'puesto')+
+            celdaTxt(f,'nombre')+celdaTxt(f,'apellidos')+celdaTxt(f,'alias')+celdaTxt(f,'email')+celdaTxt(f,'telefono')+celdaTxt(f,'puesto')+
             '<td class="etqs"></td>'+
             '<td class="act"><button class="btn danger sm icononly bdel" title="Quitar fila">'+icon('borrar')+'</button></td>'+
           '</tr>';
@@ -388,6 +401,7 @@ window.TABS.contactosCentro = {
           aplicarPintura(tr, f);
         });
       });
+      if(busqueda) aplicarBusqueda();
       revisarClaustro();
     }
 
@@ -460,9 +474,9 @@ window.TABS.contactosCentro = {
     }
 
     /* ---------- helpers ---------- */
-    function normaliza(c){ return { id:'r'+(seq++), nombre:c.nombre||'', apellidos:c.apellidos||'', email:c.email||'', telefono:c.telefono||'', puesto:c.puesto||'', grupos:(c.grupos||[]).slice() }; }
-    function filaVacia(){ return { id:'r'+(seq++), nombre:'', apellidos:'', email:'', telefono:'', puesto:'', grupos:[] }; }
-    function paraGuardar(f){ return { nombre:f.nombre.trim(), apellidos:f.apellidos.trim(), email:f.email.trim(), telefono:f.telefono.trim(), puesto:f.puesto.trim(), tipoEmail:'Trabajo', grupos:(f.grupos||[]).map(function(x){return x.trim();}).filter(Boolean) }; }
+    function normaliza(c){ return { id:'r'+(seq++), nombre:c.nombre||'', apellidos:c.apellidos||'', alias:c.alias||'', email:c.email||'', telefono:c.telefono||'', puesto:c.puesto||'', grupos:(c.grupos||[]).slice() }; }
+    function filaVacia(){ return { id:'r'+(seq++), nombre:'', apellidos:'', alias:'', email:'', telefono:'', puesto:'', grupos:[] }; }
+    function paraGuardar(f){ return { nombre:f.nombre.trim(), apellidos:f.apellidos.trim(), alias:(f.alias||'').trim(), email:f.email.trim(), telefono:f.telefono.trim(), puesto:f.puesto.trim(), tipoEmail:'Trabajo', grupos:(f.grupos||[]).map(function(x){return x.trim();}).filter(Boolean) }; }
     function chipClic(t){ return '<span class="chip clic" data-tag="'+esc(t)+'" style="--h:'+hue(t)+'">'+esc(t)+'</span>'; }
     function cerrarSvg(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'; }
   }

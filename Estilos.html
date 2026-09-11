@@ -250,7 +250,7 @@
   /* ---------- Forms ---------- */
   label.fld{display:block; margin-bottom:14px}
   label.fld > span{display:block; font-size:12.5px; font-weight:600; color:var(--ink-soft); margin-bottom:6px}
-  input[type=text], input:not([type]), input[type=email], textarea, select{
+  input[type=text], input:not([type]), input[type=email], input[type=search], textarea, select{
     width:100%; font-family:var(--sans); font-size:14px; color:var(--ink); background:var(--surface);
     border:1px solid var(--border-strong); border-radius:var(--r-sm); padding:10px 12px; transition:border-color .15s, box-shadow .15s}
   textarea{resize:vertical; line-height:1.5}
@@ -301,14 +301,14 @@
   table.rejilla.claustro th.sel-col, table.rejilla.claustro td.sel-col{width:22px; padding:0}
   table.rejilla.claustro .sel, table.rejilla.claustro .selall{width:14px; height:14px}
   table.rejilla.claustro td input[data-k]{min-width:92px}
-  table.rejilla.claustro td:nth-child(4) input[data-k]{min-width:158px}  /* E-mail */
-  table.rejilla.claustro td:nth-child(5) input[data-k]{min-width:98px}   /* Teléfono */
+  table.rejilla.claustro td:nth-child(5) input[data-k]{min-width:158px}  /* E-mail */
+  table.rejilla.claustro td:nth-child(6) input[data-k]{min-width:98px}   /* Teléfono */
 
   /* Rejilla «mis» (Google contacts y propios): sin casilla, ocupa todo el ancho de la caja. */
   table.rejilla.mis{min-width:0; width:100%}
   table.rejilla.mis td input[data-k]{min-width:92px}
-  table.rejilla.mis td:nth-child(3) input[data-k]{min-width:158px}  /* E-mail */
-  table.rejilla.mis td:nth-child(4) input[data-k]{min-width:98px}   /* Teléfono */
+  table.rejilla.mis td:nth-child(4) input[data-k]{min-width:158px}  /* E-mail */
+  table.rejilla.mis td:nth-child(5) input[data-k]{min-width:98px}   /* Teléfono */
 
   /* Puesto como «chip» editable: pastilla con color por contenido (se ajusta al texto vía size). */
   table.rejilla td.puesto-cell{padding:0 6px}
@@ -333,6 +333,12 @@
   .chipadd .ico{width:12px; height:12px}
   .chip-new{width:88px; min-width:0; font-family:var(--narrow); font-size:12.5px; padding:2px 8px;
     border-radius:999px; border:1px solid var(--primary)}
+
+  /* Caja de búsqueda (lupa) sobre las rejillas. */
+  .buscador{position:relative; display:flex; align-items:center; margin:0 0 12px; max-width:340px}
+  .buscador .ico{position:absolute; left:11px; width:16px; height:16px; color:var(--ink-faint); pointer-events:none}
+  .buscador input{width:100%; padding:9px 12px 9px 34px}
+  .buscador input:focus{border-color:var(--primary); box-shadow:var(--ring)}
 
   /* Barra de filtro por etiquetas. */
   .tagfilter{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:0 0 12px}

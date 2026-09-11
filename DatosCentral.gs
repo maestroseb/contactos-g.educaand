@@ -205,6 +205,7 @@ function tipoDeCabecera_(celda) {
   if (m(/movil/)) return 'movil';
   if (m(/telefono/) || m(/^tel$/)) return 'telefono';
   if (m(/puesto/) || m(/especialidad/) || m(/^cargo/)) return 'puesto';
+  if (m(/apodo/) || m(/^alias$/) || m(/mote/)) return 'alias';
   if (m(/etiquetas?/) || m(/^grupos?$/)) return 'grupos';
   return '';
 }
@@ -250,11 +251,12 @@ function parsearConCabecera_(matriz, cab) {
     const email = limpiarEmail_(val(cols, idx.email));
     const telefono = elegirTelefono_([val(cols, idx.telefono), val(cols, idx.movil)]);
     const puesto = val(cols, idx.puesto);
+    const alias = val(cols, idx.alias);
     const grupos = idx.grupos !== undefined ? troceaEtiquetas_(val(cols, idx.grupos)) : [];
 
     if (!email && !nombre && !apellidos) continue;
     out.push({
-      nombre: nombre, apellidos: apellidos, tipoEmail: 'Trabajo',
+      nombre: nombre, apellidos: apellidos, alias: alias, tipoEmail: 'Trabajo',
       email: email, telefono: telefono, puesto: puesto, grupos: grupos
     });
   }
