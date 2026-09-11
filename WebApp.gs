@@ -169,7 +169,9 @@ function adminLeerContactos() {
 function adminGuardarContactos(lista) {
   exigirAdmin_();
   lista = lista || [];
+  const previa = leerContactosCentroStore_();     // para detectar quién se ha quitado
   const n = guardarContactosCentroStore_(lista);
+  registrarBajas_(previa, lista);                 // anota bajas (se les retiran etiquetas al sincronizar)
   const sync = sincronizarConfigDesdeContactos_(lista);
   return { n: n, cambioCfg: sync.cambio, etiquetas: sync.etiquetas, especialidades: sync.especialidades };
 }

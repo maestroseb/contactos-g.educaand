@@ -39,7 +39,79 @@ function sincronizar(opciones) {
     filas = filas.concat(leerContactosPropios_());
   }
 
-  return procesarContactos_(filas);
+  const resumen = procesarContactos_(filas);
+  // Al sincronizar el centro, retira de Google las etiquetas de quien se haya
+  // quitado del claustro (sin borrar el contacto).
+  if (opciones.incluirCentro) {
+    try { retirarEtiquetasDeBajas_(filas, resumen); } catch (e) { Logger.log('retirarEtiquetasDeBajas_: ' + e.message); }
+  }
+  return resumen;
+}
+
+/**
+ * Retira de los contactos de Google del usuario las etiquetas de las personas
+ * dadas de baja en el claustro (registro de bajas). NO borra el contacto ni sus
+ * demás datos: solo quita las pertenencias a esas etiquetas y garantiza que
+ * sigue en «Mis contactos». No toca a nadie que siga activo en la lista actual.
+ */
+function retirarEtiquetasDeBajas_(filasActuales, resumen) {
+  const bajas = leerBajas_();
+  if (!bajas.length) return;
+
+  // Correos que se están sincronizando ahora (activos): no se tocan.
+  const activos = {};
+  (filasActuales || []).forEach(f => { const e = String(f.email || '').trim().toLowerCase(); if (e) activos[e] = true; });
+
+  // email -> { etiquetaEnMinusculas: true } a retirar.
+  const porEmail = {};
+  bajas.forEach(b => {
+    const e = String(b.email || '').trim().toLowerCase();
+    if (!e || activos[e]) return;
+    const set = porEmail[e] || (porEmail[e] = {});
+    (b.grupos || []).forEach(g => { const gl = String(g || '').trim().toLowerCase(); if (gl) set[gl] = true; });
+  });
+  if (!Object.keys(porEmail).length) return;
+
+  // resourceName del grupo -> nombre (para saber qué etiqueta es cada pertenencia).
+  const nombrePorRN = {};
+  (People.ContactGroups.list().contactGroups || []).forEach(g => { nombrePorRN[g.resourceName] = g.name; });
+
+  const aActualizar = [];
+  obtenerTodosLosContactos_().forEach(c => {
+    const emails = (c.emailAddresses || []).map(e => String(e.value || '').trim().toLowerCase());
+    if (emails.some(e => activos[e])) return;                 // sigue activo por algún correo
+    let quitar = null;
+    for (let i = 0; i < emails.length; i++) { if (porEmail[emails[i]]) { quitar = porEmail[emails[i]]; break; } }
+    if (!quitar) return;
+
+    const membs = c.memberships || [];
+    const nuevas = membs.filter(m => {
+      const rn = m.contactGroupMembership && m.contactGroupMembership.contactGroupResourceName;
+      if (!rn) return true;                                   // conserva pertenencias que no sean de grupo
+      const nombre = (nombrePorRN[rn] || '').trim().toLowerCase();
+      return !quitar[nombre];                                 // quita solo las etiquetas de la baja
+    });
+    if (nuevas.length === membs.length) return;               // no tenía esas etiquetas
+
+    // Garantiza que sigue en «Mis contactos» (para que no desaparezca del móvil).
+    const tieneMy = nuevas.some(m => m.contactGroupMembership &&
+      m.contactGroupMembership.contactGroupResourceName === 'contactGroups/myContacts');
+    if (!tieneMy) nuevas.push(MEMB_MYCONTACTS_);
+
+    aActualizar.push({ resourceName: c.resourceName, persona: { resourceName: c.resourceName, etag: c.etag, memberships: nuevas } });
+  });
+  if (!aActualizar.length) return;
+
+  const fall = ejecutarPorLotes_(aActualizar, 200,
+    function (chunk) {
+      const map = {};
+      chunk.forEach(u => { map[u.resourceName] = u.persona; });
+      People.People.batchUpdateContacts({ contacts: map, updateMask: 'memberships', readMask: 'names' });
+    },
+    function (u) { People.People.updateContact(u.persona, u.resourceName, { updatePersonFields: 'memberships' }); });
+  resumen.actualizados += (aActualizar.length - fall.length);
+  resumen.errores += fall.length;
+  try { eliminarGruposVacios_(); } catch (e) { /* silencioso */ }
 }
 
 /**
