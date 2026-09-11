@@ -50,11 +50,15 @@ function sincronizar(opciones) {
  * (batchCreate/batchUpdate, hasta 200 por llamada), con reintentos y caída a
  * uno-a-uno si un lote falla. Así es rápido y a prueba de errores.
  */
+/** Pertenencia al grupo del sistema «Mis contactos» (para que se vean/sincronicen
+ *  en el móvil, no solo dentro de una etiqueta). */
+const MEMB_MYCONTACTS_ = { contactGroupMembership: { contactGroupResourceName: 'contactGroups/myContacts' } };
+
 function procesarContactos_(filas) {
   const resumen = { creados: 0, actualizados: 0, sinCambios: 0, omitidos: 0, errores: 0 };
   // No se toca el correo en las actualizaciones (es la clave de emparejamiento
   // y así no se borran otros correos que tuviera el contacto).
-  const MASK_UPDATE = 'names,phoneNumbers,organizations,memberships';
+  const MASK_UPDATE = 'names,phoneNumbers,organizations,memberships,nicknames';
 
   const contactosExistentes = obtenerTodosLosContactos_();
   const emailsExistentes = {};
@@ -89,6 +93,9 @@ function procesarContactos_(filas) {
       return { contactGroupMembership: { contactGroupResourceName: idGrupo } };
     });
 
+    // Siempre en «Mis contactos» además de en sus etiquetas (para el móvil).
+    const memb = grupos.length ? nuevasMemb.concat([MEMB_MYCONTACTS_]) : [MEMB_MYCONTACTS_];
+
     const existente = emailsExistentes[email];
     if (existente) {
       // Actualización NO destructiva: lo que la lista no trae se conserva.
@@ -99,13 +106,12 @@ function procesarContactos_(filas) {
         emailAddresses: existente.emailAddresses || [{ type: f.tipoEmail || 'Trabajo', value: email }],
         phoneNumbers: f.telefono ? [{ type: 'Movil', value: f.telefono }] : (existente.phoneNumbers || []),
         organizations: f.puesto ? [{ name: f.puesto }] : (existente.organizations || []),
-        memberships: grupos.length ? nuevasMemb : (existente.memberships || [])
+        nicknames: f.alias ? [{ value: f.alias }] : (existente.nicknames || []),
+        memberships: grupos.length ? memb : (existente.memberships || [])
       };
       if (esContactoDiferente_(existente, persona)) aActualizar.push({ resourceName: existente.resourceName, persona: persona });
       else resumen.sinCambios++;
     } else {
-      const memb = grupos.length ? nuevasMemb
-        : [{ contactGroupMembership: { contactGroupResourceName: 'contactGroups/myContacts' } }];
       const persona = {
         names: [{ givenName: f.nombre || '', familyName: f.apellidos || '' }],
         emailAddresses: [{ type: f.tipoEmail || 'Trabajo', value: email }],
@@ -113,6 +119,7 @@ function procesarContactos_(filas) {
       };
       if (f.telefono) persona.phoneNumbers = [{ type: 'Movil', value: f.telefono }];
       if (f.puesto) persona.organizations = [{ name: f.puesto }];
+      if (f.alias) persona.nicknames = [{ value: f.alias }];
       aCrear.push({ contactPerson: persona });
     }
   });
@@ -216,6 +223,7 @@ function getMisContactos() {
     etag: c.etag,
     nombre: c.names ? c.names[0].givenName : '',
     apellidos: c.names ? c.names[0].familyName : '',
+    alias: c.nicknames ? c.nicknames[0].value : '',
     email: c.emailAddresses ? c.emailAddresses[0].value : '',
     telefono: c.phoneNumbers ? c.phoneNumbers[0].value : '',
     puesto: c.organizations ? c.organizations[0].name : '',
@@ -257,8 +265,8 @@ function guardarMisContactos(payload) {
       }
       return { contactGroupMembership: { contactGroupResourceName: id } };
     });
-    // Si se quedó sin etiquetas, al menos que siga en "Mis contactos".
-    return arr.length ? arr : [{ contactGroupMembership: { contactGroupResourceName: 'contactGroups/myContacts' } }];
+    // Siempre en "Mis contactos" (además de sus etiquetas) para que se vea en el móvil.
+    return arr.concat([MEMB_MYCONTACTS_]);
   }
 
   // Actualizaciones: una por contacto, con la máscara exacta de lo que cambió
@@ -270,6 +278,7 @@ function guardarMisContactos(payload) {
     if (e.mask.indexOf('emailAddresses') !== -1) persona.emailAddresses = e.email ? [{ value: e.email }] : [];
     if (e.mask.indexOf('phoneNumbers') !== -1) persona.phoneNumbers = e.telefono ? [{ type: 'Movil', value: e.telefono }] : [];
     if (e.mask.indexOf('organizations') !== -1) persona.organizations = e.puesto ? [{ name: e.puesto }] : [];
+    if (e.mask.indexOf('nicknames') !== -1) persona.nicknames = e.alias ? [{ value: e.alias }] : [];
     if (e.mask.indexOf('memberships') !== -1) persona.memberships = membershipsDe(e.grupos);
     try {
       conReintentos_(function () { People.People.updateContact(persona, e.resourceName, { updatePersonFields: e.mask }); }, 3);
@@ -297,7 +306,7 @@ function obtenerTodosLosContactos_() {
   let pagina = null;
   do {
     const r = People.People.Connections.list('people/me', {
-      personFields: 'names,emailAddresses,phoneNumbers,organizations,memberships',
+      personFields: 'names,emailAddresses,phoneNumbers,organizations,memberships,nicknames',
       pageToken: pagina,
       pageSize: 1000
     });
@@ -322,6 +331,9 @@ function esContactoDiferente_(existente, nuevo) {
   const oe = existente.organizations && existente.organizations[0];
   const on = nuevo.organizations && nuevo.organizations[0];
   if (comp(oe ? oe.name : '', on ? on.name : '')) return true;
+  const ke = existente.nicknames && existente.nicknames[0];
+  const kn = nuevo.nicknames && nuevo.nicknames[0];
+  if (comp(ke ? ke.value : '', kn ? kn.value : '')) return true;
   return !sonMismosGrupos_(existente.memberships || [], nuevo.memberships || []);
 }
 
@@ -354,7 +366,7 @@ function eliminarGruposVacios_() {
  * duplicados cuyo principal se actualizó correctamente.
  */
 function fusionarDuplicados_() {
-  const MASK = 'names,emailAddresses,phoneNumbers,organizations,memberships';
+  const MASK = 'names,emailAddresses,phoneNumbers,organizations,memberships,nicknames';
   const existentes = obtenerTodosLosContactos_();
   const porEmail = {};
   existentes.forEach(c => {
@@ -383,6 +395,7 @@ function fusionarDuplicados_() {
         arr.some(x => x.value.toLowerCase() === e.value.toLowerCase()));
       fusionarCampo_(principal, dup, 'phoneNumbers', (t, arr) => arr.some(x => x.value === t.value));
       fusionarCampo_(principal, dup, 'organizations', (o, arr) => arr.some(x => x.name === o.name));
+      fusionarCampo_(principal, dup, 'nicknames', (k, arr) => arr.some(x => x.value === k.value));
       (dup.memberships || []).forEach(m => {
         if (!m.contactGroupMembership) return;
         const rn = m.contactGroupMembership.contactGroupResourceName.trim().toLowerCase();
