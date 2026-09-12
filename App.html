@@ -103,8 +103,10 @@ function armarChipInput(inp){
   inp.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); inp.blur(); } });
   tam(); comoChip();   // estado inicial (chip solo si ya trae valor)
 }
-/** Anchos (mín, máx) en caracteres por columna para el auto-ajuste de inputs. */
-var ANCHOS_COL = { nombre:[8,20], apellidos:[8,22], alias:[5,16], email:[12,28], telefono:[9,14] };
+/** Anchos (mín, máx) en caracteres por columna para el auto-ajuste de inputs.
+ *  Máximos ajustados para que quepan todas las columnas en pantalla; al enfocar
+ *  un campo se revela el valor completo de todas formas. */
+var ANCHOS_COL = { nombre:[7,14], apellidos:[7,14], alias:[5,10], email:[10,16], telefono:[9,12] };
 
 /**
  * Auto-ajuste de un input de rejilla: se dimensiona por su contenido (atributo
