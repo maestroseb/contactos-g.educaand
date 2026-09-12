@@ -290,6 +290,13 @@
   table.rejilla td input[data-k]:focus{box-shadow:inset 0 0 0 2px var(--primary)}
   table.rejilla td.act{width:44px; text-align:center}
   table.rejilla td.act .btn{box-shadow:none; border-color:transparent}
+  table.rejilla td.act .btn + .btn{margin-left:2px}
+  /* Claustro: la columna de acciones aloja pausar + eliminar. */
+  table.rejilla.claustro td.act{width:auto; white-space:nowrap; padding:0 4px}
+  .btn.bpause.on{color:var(--good)}
+  /* Fila «en pausa» (baja temporal): atenuada y con fondo tenue. */
+  table.rejilla tbody tr.pausada{opacity:.6; background:var(--surface-2)}
+  table.rejilla tbody tr.pausada.marcada{opacity:.72}
   table.rejilla tbody tr:hover{background:transparent}
   /* selección y etiquetas en bloque */
   table.rejilla th.sel-col, table.rejilla td.sel-col{width:38px; text-align:center; padding:0}
