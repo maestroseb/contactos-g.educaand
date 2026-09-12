@@ -303,13 +303,17 @@
   table.rejilla .sel, table.rejilla .selall{width:17px; height:17px; min-width:0; padding:0; accent-color:var(--primary); cursor:pointer; margin:0; box-shadow:none}
   table.rejilla tbody tr.marcada{background:var(--primary-soft)}
 
-  /* Claustro: columnas ajustadas al contenido (no estiradas), casilla muy estrecha. */
-  table.rejilla.claustro{min-width:0; width:auto}
+  /* Claustro: ocupa todo el ancho de la tarjeta y reparte el espacio; cada
+     columna tiene un mínimo realista (si no cabe, la tabla hace scroll). */
+  table.rejilla.claustro{min-width:0; width:100%}
   table.rejilla.claustro th.sel-col, table.rejilla.claustro td.sel-col{width:22px; padding:0}
   table.rejilla.claustro .sel, table.rejilla.claustro .selall{width:14px; height:14px}
-  table.rejilla.claustro td input[data-k]{min-width:92px}
-  table.rejilla.claustro td:nth-child(5) input[data-k]{min-width:158px}  /* E-mail */
-  table.rejilla.claustro td:nth-child(6) input[data-k]{min-width:98px}   /* Teléfono */
+  table.rejilla.claustro td input[data-k]{min-width:90px}
+  table.rejilla.claustro td:nth-child(2) input[data-k]{min-width:120px}  /* Nombre */
+  table.rejilla.claustro td:nth-child(3) input[data-k]{min-width:130px}  /* Apellidos */
+  table.rejilla.claustro td:nth-child(4) input[data-k]{min-width:82px}   /* Alias */
+  table.rejilla.claustro td:nth-child(5) input[data-k]{min-width:190px}  /* E-mail */
+  table.rejilla.claustro td:nth-child(6) input[data-k]{min-width:100px}  /* Teléfono */
 
   /* Rejilla «mis» (Google contacts y propios): sin casilla, ocupa todo el ancho de la caja. */
   table.rejilla.mis{min-width:0; width:100%}
@@ -340,6 +344,16 @@
   .chipadd .ico{width:12px; height:12px}
   .chip-new{width:88px; min-width:0; font-family:var(--narrow); font-size:12.5px; padding:2px 8px;
     border-radius:999px; border:1px solid var(--primary)}
+
+  /* Fila del buscador: lupa + filtro por estado + contador. */
+  .buscador-row{display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap; margin:0 0 12px}
+  .buscador-row .buscador{margin:0}
+  .segmento{display:inline-flex; border:1px solid var(--border-strong); border-radius:var(--r-sm); overflow:hidden; box-shadow:var(--sh-sm)}
+  .segmento button{font:inherit; font-size:13px; font-weight:600; padding:7px 12px; border:none; background:var(--surface); color:var(--ink-soft); cursor:pointer; border-left:1px solid var(--border)}
+  .segmento button:first-child{border-left:none}
+  .segmento button:hover{background:var(--surface-2)}
+  .segmento button.on{background:var(--primary); color:var(--on-primary)}
+  .buscador-cuenta{font-size:12.5px}
 
   /* Caja de búsqueda (lupa) sobre las rejillas. */
   .buscador{position:relative; display:flex; align-items:center; margin:0 0 12px; max-width:340px}
