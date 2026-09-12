@@ -176,7 +176,8 @@
   .pal-ac.ac-fixed{position:fixed; top:0; left:0; z-index:90}
   .pal-ac-crear{color:var(--primary); font-weight:600}
   .pal-ac-crear .ico{width:15px; height:15px}
-  .assign-banner{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13.5px; color:var(--ink-soft); width:100%}
+  .assign-banner{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13.5px; color:var(--ink-soft); flex:1 1 auto; min-width:220px}
+  .assign-banner:empty{flex:0}
   .assign-banner b{color:var(--ink)}
   /* Celda de etiquetas de la rejilla */
   td.etqs{min-width:230px}
@@ -184,11 +185,11 @@
   .etq-cell .vacio{color:var(--ink-faint); font-size:12px}
   table.claustro.asignando tbody tr{cursor:pointer}
   table.claustro.asignando tbody tr:hover{background:var(--primary-soft)}
-  .pagehead{margin-bottom:22px}
+  .pagehead{margin-bottom:16px}
   .pagehead h1{font-size:26px; font-weight:800; letter-spacing:-.02em}
   .pagehead .sub{color:var(--ink-soft); font-size:14.5px; margin-top:5px}
-  .content{display:flex; flex-direction:column; gap:20px}
-  .tabpanel{display:flex; flex-direction:column; gap:20px}
+  .content{display:flex; flex-direction:column; gap:16px}
+  .tabpanel{display:flex; flex-direction:column; gap:16px}
 
   /* Centro + Administradores en paralelo (se apilan si no caben). */
   .cfg-top{display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:20px; align-items:start}
@@ -217,10 +218,10 @@
 
   /* ---------- Cards ---------- */
   .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg);
-    padding:24px 26px; box-shadow:var(--sh-md)}
+    padding:18px 22px; box-shadow:var(--sh-md)}
   .card h2{font-size:17.5px; font-weight:700; display:flex; align-items:center; gap:9px}
   .card h2 .ico{width:19px;height:19px;color:var(--primary)}
-  .card > .desc{color:var(--ink-soft); font-size:14px; margin:6px 0 16px; max-width:64ch}
+  .card > .desc{color:var(--ink-soft); font-size:13.5px; line-height:1.45; margin:5px 0 12px; max-width:88ch}
   .card + .card{margin-top:0}
 
   /* ---------- Buttons ---------- */

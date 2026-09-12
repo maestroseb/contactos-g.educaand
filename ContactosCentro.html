@@ -21,7 +21,7 @@ window.TABS.contactosCentro = {
           '<h2>'+icon('claustro')+'Claustro'+(estado.nombreCentro?' de '+esc(estado.nombreCentro):'')+'</h2>',
           '<button class="btn sm" id="bImport">'+icon('importar')+'Importar desde Séneca…</button>',
         '</div>',
-        '<p class="desc">Elige una etiqueta abajo y <b>pincha (o arrastra arriba/abajo) sobre las personas</b> para asignársela; vuelve a pinchar para quitarla. También puedes marcar filas y aplicarla en bloque. <b>Doble clic</b> en una etiqueta para <b>renombrarla</b> en todo el claustro. Con el botón <b>⏸ Pausar</b> das de baja temporal a una persona (p. ej. de baja médica): conserva sus datos y etiquetas pero deja de sincronizarse y se le retiran las etiquetas de Google; pulsa <b>▶</b> para reactivarla.</p>',
+        '<p class="desc">Elige una etiqueta y <b>pincha o arrastra</b> sobre las personas para asignársela (repite para quitarla), o marca filas y aplícala en bloque. <b>Doble clic</b> en una etiqueta la <b>renombra</b> en todo el claustro. <b>⏸ Pausar</b> da de baja temporal (conserva datos y etiquetas, deja de sincronizar); <b>▶</b> reactiva.</p>',
         '<div class="palette" id="paleta"></div>',
         '<div id="buscadorZona"></div>',
         '<div id="gridZona"><p class="muted">Cargando claustro…</p></div>',
@@ -510,7 +510,6 @@ window.TABS.contactosCentro = {
     function filaVacia(){ return { id:'r'+(seq++), nombre:'', apellidos:'', alias:'', email:'', telefono:'', puesto:'', pausado:false, grupos:[] }; }
     function paraGuardar(f){ var o={ nombre:f.nombre.trim(), apellidos:f.apellidos.trim(), alias:(f.alias||'').trim(), email:f.email.trim(), telefono:f.telefono.trim(), puesto:f.puesto.trim(), tipoEmail:'Trabajo', grupos:(f.grupos||[]).map(function(x){return x.trim();}).filter(Boolean) }; if(f.pausado) o.pausado=true; return o; }
     function chipClic(t){ return '<span class="chip clic" data-tag="'+esc(t)+'" style="--h:'+hue(t)+'">'+esc(t)+'</span>'; }
-    function cerrarSvg(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'; }
   }
 };
 </script>
