@@ -37,16 +37,38 @@ window.TABS.contactosCentro = {
     var zona = cont.querySelector('#gridZona');
     var filasInicial = null;   // instantánea para detectar cambios (y reversiones)
     var busqueda = '';         // texto del buscador (lupa)
+    var filtroPausa = 'todas'; // 'todas' | 'activas' | 'pausa'
 
-    // Buscador con lupa: filtra las filas en vivo (oculta las que no coinciden).
-    cont.querySelector('#buscadorZona').appendChild(
-      cajaBusqueda('Buscar por nombre, alias, correo, teléfono, puesto o etiqueta…', function(v){ busqueda = v; aplicarBusqueda(); }));
+    // Buscador con lupa + filtro por estado (todas/activas/en pausa) + contador.
+    var bzona = cont.querySelector('#buscadorZona');
+    var bwrap = document.createElement('div'); bwrap.className = 'buscador-row';
+    bwrap.appendChild(cajaBusqueda('Buscar por nombre, alias, correo, teléfono, puesto o etiqueta…', function(v){ busqueda = v; aplicarBusqueda(); }));
+    var seg = document.createElement('div'); seg.className = 'segmento';
+    seg.innerHTML = [['todas','Todas'],['activas','Activas'],['pausa','En pausa']]
+      .map(function(o){ return '<button data-f="'+o[0]+'"'+(o[0]==='todas'?' class="on"':'')+'>'+o[1]+'</button>'; }).join('');
+    Array.prototype.forEach.call(seg.querySelectorAll('button'), function(b){
+      b.onclick = function(){ filtroPausa = b.getAttribute('data-f');
+        Array.prototype.forEach.call(seg.querySelectorAll('button'), function(x){ x.classList.toggle('on', x===b); });
+        aplicarBusqueda(); };
+    });
+    bwrap.appendChild(seg);
+    var cuenta = document.createElement('span'); cuenta.className = 'buscador-cuenta muted';
+    bwrap.appendChild(cuenta);
+    bzona.appendChild(bwrap);
+
     function textoFila(f){ return [f.nombre, f.apellidos, f.alias, f.email, f.telefono, f.puesto].concat(f.grupos||[]).join(' ')+(f.pausado?' pausa en pausa pausado':''); }
+    function pasaPausa(f){ return filtroPausa==='todas' || (filtroPausa==='pausa' ? !!f.pausado : !f.pausado); }
+    function actualizarCuenta(){
+      var reales = FILAS.filter(function(f){ return f.email || f.nombre; });
+      var pausadas = reales.filter(function(f){ return f.pausado; }).length;
+      cuenta.textContent = reales.length + (reales.length===1?' persona':' personas') + (pausadas ? ' · '+pausadas+' en pausa' : '');
+    }
     function aplicarBusqueda(){
       Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
         var f = filaId(tr.getAttribute('data-id'));
-        tr.hidden = !!f && !coincideBusqueda(textoFila(f), busqueda);
+        tr.hidden = !!f && !(pasaPausa(f) && coincideBusqueda(textoFila(f), busqueda));
       });
+      actualizarCuenta();
     }
 
     // Pegar en bloque tipo hoja de cálculo (p. ej. una columna de teléfonos). Se
@@ -101,7 +123,8 @@ window.TABS.contactosCentro = {
         function(res, st){
           filasInicial = serializarFilas(); revisarClaustro();
           var n = (res && typeof res === 'object') ? res.n : res;
-          var msg = 'Guardado: '+n+' personas en el claustro.';
+          var pausadas = filas.filter(function(f){ return f.pausado; }).length;
+          var msg = 'Guardado: '+n+' personas en el claustro'+(pausadas ? ' ('+(n-pausadas)+' activas · '+pausadas+' en pausa)' : '')+'.';
           // El servidor sincroniza las etiquetas y los puestos nuevos con Configuración.
           if(res && res.cambioCfg){
             cats = res.etiquetas || cats;
@@ -358,7 +381,8 @@ window.TABS.contactosCentro = {
       // inputs de texto
       Array.prototype.forEach.call(zona.querySelectorAll('input[data-k]'), function(inp){
         if(inp.getAttribute('data-k')==='puesto') armarChipInput(inp);
-        inp.oninput = function(){ var f=fila(inp); if(f) f[inp.getAttribute('data-k')] = inp.value; revisarClaustro(); };
+        inp.title = inp.value;   // al pasar el ratón se ve el valor completo aunque la columna lo recorte
+        inp.oninput = function(){ var f=fila(inp); if(f) f[inp.getAttribute('data-k')] = inp.value; inp.title = inp.value; revisarClaustro(); };
       });
       // selección: marcar/desmarcar todas actúa in situ (sin repintar) para que
       // «desmarcar todas» funcione y la casilla de cabecera refleje el estado real.
@@ -409,7 +433,7 @@ window.TABS.contactosCentro = {
           aplicarPintura(tr, f);
         });
       });
-      if(busqueda) aplicarBusqueda();
+      aplicarBusqueda();   // reaplica búsqueda/filtro y refresca el contador
       revisarClaustro();
     }
 
