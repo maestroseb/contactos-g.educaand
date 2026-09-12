@@ -27,13 +27,19 @@ function sincronizar(opciones) {
 
   // Reunir la lista de contactos a sincronizar.
   let filas = [];
+  let pausados = [];
   if (opciones.incluirCentro) {
-    let centro = leerContactosCentro_();
+    const centro = leerContactosCentro_();
+    // Personas «en pausa»: se quedan en el listado pero NO se sincronizan; se les
+    // retiran las etiquetas (baja temporal reversible). Se recogen de la lista
+    // completa, independientemente del filtro por grupos.
+    pausados = centro.filter(c => c && c.pausado && c.email).map(c => ({ email: c.email, grupos: c.grupos || [] }));
+    let activos = centro.filter(c => !(c && c.pausado));
     if (opciones.gruposCentro && opciones.gruposCentro.length) {
       const sel = opciones.gruposCentro;
-      centro = centro.filter(c => c.grupos.some(g => sel.indexOf(g) !== -1));
+      activos = activos.filter(c => c.grupos.some(g => sel.indexOf(g) !== -1));
     }
-    filas = filas.concat(centro);
+    filas = filas.concat(activos);
   }
   if (opciones.incluirPropios) {
     filas = filas.concat(leerContactosPropios_());
@@ -41,21 +47,22 @@ function sincronizar(opciones) {
 
   const resumen = procesarContactos_(filas);
   // Al sincronizar el centro, retira de Google las etiquetas de quien se haya
-  // quitado del claustro (sin borrar el contacto).
+  // quitado del claustro (bajas) o esté en pausa. No se borra el contacto.
   if (opciones.incluirCentro) {
-    try { retirarEtiquetasDeBajas_(filas, resumen); } catch (e) { Logger.log('retirarEtiquetasDeBajas_: ' + e.message); }
+    try { retirarEtiquetasDeBajas_(filas, pausados, resumen); } catch (e) { Logger.log('retirarEtiquetasDeBajas_: ' + e.message); }
   }
   return resumen;
 }
 
 /**
  * Retira de los contactos de Google del usuario las etiquetas de las personas
- * dadas de baja en el claustro (registro de bajas). NO borra el contacto ni sus
- * demás datos: solo quita las pertenencias a esas etiquetas y garantiza que
- * sigue en «Mis contactos». No toca a nadie que siga activo en la lista actual.
+ * dadas de baja en el claustro (registro de bajas) y de las que están «en pausa».
+ * NO borra el contacto ni sus demás datos: solo quita las pertenencias a esas
+ * etiquetas y garantiza que sigue en «Mis contactos». No toca a nadie que siga
+ * activo en la lista actual.
  */
-function retirarEtiquetasDeBajas_(filasActuales, resumen) {
-  const bajas = leerBajas_();
+function retirarEtiquetasDeBajas_(filasActuales, pausados, resumen) {
+  const bajas = leerBajas_().concat(pausados || []);
   if (!bajas.length) return;
 
   // Correos que se están sincronizando ahora (activos): no se tocan.

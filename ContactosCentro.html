@@ -21,7 +21,7 @@ window.TABS.contactosCentro = {
           '<h2>'+icon('claustro')+'Claustro'+(estado.nombreCentro?' de '+esc(estado.nombreCentro):'')+'</h2>',
           '<button class="btn sm" id="bImport">'+icon('importar')+'Importar desde Séneca…</button>',
         '</div>',
-        '<p class="desc">Elige una etiqueta abajo y <b>pincha (o arrastra arriba/abajo) sobre las personas</b> para asignársela; vuelve a pinchar para quitarla. También puedes marcar filas y aplicarla en bloque. <b>Doble clic</b> en una etiqueta para <b>renombrarla</b> en todo el claustro.</p>',
+        '<p class="desc">Elige una etiqueta abajo y <b>pincha (o arrastra arriba/abajo) sobre las personas</b> para asignársela; vuelve a pinchar para quitarla. También puedes marcar filas y aplicarla en bloque. <b>Doble clic</b> en una etiqueta para <b>renombrarla</b> en todo el claustro. Con el botón <b>⏸ Pausar</b> das de baja temporal a una persona (p. ej. de baja médica): conserva sus datos y etiquetas pero deja de sincronizarse y se le retiran las etiquetas de Google; pulsa <b>▶</b> para reactivarla.</p>',
         '<div class="palette" id="paleta"></div>',
         '<div id="buscadorZona"></div>',
         '<div id="gridZona"><p class="muted">Cargando claustro…</p></div>',
@@ -41,7 +41,7 @@ window.TABS.contactosCentro = {
     // Buscador con lupa: filtra las filas en vivo (oculta las que no coinciden).
     cont.querySelector('#buscadorZona').appendChild(
       cajaBusqueda('Buscar por nombre, alias, correo, teléfono, puesto o etiqueta…', function(v){ busqueda = v; aplicarBusqueda(); }));
-    function textoFila(f){ return [f.nombre, f.apellidos, f.alias, f.email, f.telefono, f.puesto].concat(f.grupos||[]).join(' '); }
+    function textoFila(f){ return [f.nombre, f.apellidos, f.alias, f.email, f.telefono, f.puesto].concat(f.grupos||[]).join(' ')+(f.pausado?' pausa en pausa pausado':''); }
     function aplicarBusqueda(){
       Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
         var f = filaId(tr.getAttribute('data-id'));
@@ -341,11 +341,15 @@ window.TABS.contactosCentro = {
         '<th>Nombre</th><th>Apellidos</th><th>Alias</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas</th><th></th>'+
         '</tr></thead><tbody>'+
         FILAS.map(function(f){
-          return '<tr data-id="'+f.id+'"'+(SEL.has(f.id)?' class="marcada"':'')+'>'+
+          var cls = [SEL.has(f.id)?'marcada':'', f.pausado?'pausada':''].filter(Boolean).join(' ');
+          return '<tr data-id="'+f.id+'"'+(cls?' class="'+cls+'"':'')+'>'+
             '<td class="sel-col"><input type="checkbox" class="sel"'+(SEL.has(f.id)?' checked':'')+'></td>'+
             celdaTxt(f,'nombre')+celdaTxt(f,'apellidos')+celdaTxt(f,'alias')+celdaTxt(f,'email')+celdaTxt(f,'telefono')+celdaTxt(f,'puesto')+
             '<td class="etqs"></td>'+
-            '<td class="act"><button class="btn danger sm icononly bdel" title="Quitar fila">'+icon('borrar')+'</button></td>'+
+            '<td class="act">'+
+              '<button class="btn sm icononly bpause'+(f.pausado?' on':'')+'" title="'+(f.pausado?'Reactivar (vuelve a sincronizarse)':'Pausar: baja temporal, se le retiran las etiquetas al sincronizar')+'">'+icon(f.pausado?'play':'pausa')+'</button>'+
+              '<button class="btn danger sm icononly bdel" title="Quitar fila">'+icon('borrar')+'</button>'+
+            '</td>'+
           '</tr>';
         }).join('')+'</tbody></table></div>';
       zona.innerHTML = html;
@@ -379,6 +383,10 @@ window.TABS.contactosCentro = {
       // quitar fila
       Array.prototype.forEach.call(zona.querySelectorAll('.bdel'), function(b){
         b.onclick = function(e){ e.stopPropagation(); var id=b.closest('tr').getAttribute('data-id'); FILAS=FILAS.filter(function(f){return f.id!==id;}); SEL.delete(id); renderGrid(); };
+      });
+      // pausar / reactivar (baja temporal: conserva datos y etiquetas)
+      Array.prototype.forEach.call(zona.querySelectorAll('.bpause'), function(b){
+        b.onclick = function(e){ e.stopPropagation(); var f=filaId(b.closest('tr').getAttribute('data-id')); if(!f) return; f.pausado=!f.pausado; renderGrid(); revisarClaustro(); };
       });
       // editor de etiquetas por celda (chips + añadir con autocompletado tipo Notion)
       Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
@@ -474,9 +482,9 @@ window.TABS.contactosCentro = {
     }
 
     /* ---------- helpers ---------- */
-    function normaliza(c){ return { id:'r'+(seq++), nombre:c.nombre||'', apellidos:c.apellidos||'', alias:c.alias||'', email:c.email||'', telefono:c.telefono||'', puesto:c.puesto||'', grupos:(c.grupos||[]).slice() }; }
-    function filaVacia(){ return { id:'r'+(seq++), nombre:'', apellidos:'', alias:'', email:'', telefono:'', puesto:'', grupos:[] }; }
-    function paraGuardar(f){ return { nombre:f.nombre.trim(), apellidos:f.apellidos.trim(), alias:(f.alias||'').trim(), email:f.email.trim(), telefono:f.telefono.trim(), puesto:f.puesto.trim(), tipoEmail:'Trabajo', grupos:(f.grupos||[]).map(function(x){return x.trim();}).filter(Boolean) }; }
+    function normaliza(c){ return { id:'r'+(seq++), nombre:c.nombre||'', apellidos:c.apellidos||'', alias:c.alias||'', email:c.email||'', telefono:c.telefono||'', puesto:c.puesto||'', pausado:!!c.pausado, grupos:(c.grupos||[]).slice() }; }
+    function filaVacia(){ return { id:'r'+(seq++), nombre:'', apellidos:'', alias:'', email:'', telefono:'', puesto:'', pausado:false, grupos:[] }; }
+    function paraGuardar(f){ var o={ nombre:f.nombre.trim(), apellidos:f.apellidos.trim(), alias:(f.alias||'').trim(), email:f.email.trim(), telefono:f.telefono.trim(), puesto:f.puesto.trim(), tipoEmail:'Trabajo', grupos:(f.grupos||[]).map(function(x){return x.trim();}).filter(Boolean) }; if(f.pausado) o.pausado=true; return o; }
     function chipClic(t){ return '<span class="chip clic" data-tag="'+esc(t)+'" style="--h:'+hue(t)+'">'+esc(t)+'</span>'; }
     function cerrarSvg(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'; }
   }
