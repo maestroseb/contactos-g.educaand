@@ -380,7 +380,7 @@ window.TABS.contactosCentro = {
       var tabla = zona.querySelector('table');
       // inputs de texto
       Array.prototype.forEach.call(zona.querySelectorAll('input[data-k]'), function(inp){
-        if(inp.getAttribute('data-k')==='puesto') armarChipInput(inp);
+        if(inp.getAttribute('data-k')==='puesto') armarChipInput(inp); else autofitInput(inp);
         inp.title = inp.value;   // al pasar el ratón se ve el valor completo aunque la columna lo recorte
         inp.oninput = function(){ var f=fila(inp); if(f) f[inp.getAttribute('data-k')] = inp.value; inp.title = inp.value; revisarClaustro(); };
       });

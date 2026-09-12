@@ -103,6 +103,29 @@ function armarChipInput(inp){
   inp.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); inp.blur(); } });
   tam(); comoChip();   // estado inicial (chip solo si ya trae valor)
 }
+/** Anchos (mín, máx) en caracteres por columna para el auto-ajuste de inputs. */
+var ANCHOS_COL = { nombre:[8,20], apellidos:[8,22], alias:[5,16], email:[12,28], telefono:[9,14] };
+
+/**
+ * Auto-ajuste de un input de rejilla: se dimensiona por su contenido (atributo
+ * `size`) entre un mínimo y un máximo; al enfocarlo se expande para ver/editar
+ * el valor completo («revelar al clic») y al salir vuelve a encogerse. El ancho
+ * real lo da el CSS mediante la clase `autofit` (width:auto).
+ */
+function autofitInput(inp){
+  var r = ANCHOS_COL[inp.getAttribute('data-k')] || [6, 22];
+  var min = r[0], max = r[1], MAXFOCO = 48;
+  inp.classList.add('autofit');
+  function calc(){
+    var foco = document.activeElement === inp;
+    var n = (inp.value || '').length + 1;
+    inp.size = Math.max(min, foco ? Math.min(MAXFOCO, n) : Math.min(max, n));
+  }
+  inp.addEventListener('focus', calc);
+  inp.addEventListener('blur', calc);
+  inp.addEventListener('input', calc);
+  calc();
+}
 function icon(name, cls){
   return '<svg class="ico'+(cls?' '+cls:'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
     'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(window.ICON[name]||'')+'</svg>';
