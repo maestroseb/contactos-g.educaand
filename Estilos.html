@@ -288,6 +288,11 @@
   table.rejilla td input[data-k]{border:none; border-radius:0; background:transparent; width:100%;
     min-width:120px; padding:9px 11px; font-size:13.5px; box-shadow:none}
   table.rejilla td input[data-k]:focus{box-shadow:inset 0 0 0 2px var(--primary)}
+  /* Auto-ajuste: el input se dimensiona por su contenido (atributo size) y al
+     enfocarlo se expande para ver/editar el valor completo («revelar al clic»). */
+  table.rejilla td input[data-k].autofit{width:auto; min-width:0}
+  /* Zebra: filas alternas con un fondo tenue (los estados marcada/pausada mandan). */
+  table.rejilla tbody tr:nth-child(even){background:var(--surface-2)}
   table.rejilla td.act{width:44px; text-align:center}
   table.rejilla td.act .btn{box-shadow:none; border-color:transparent}
   table.rejilla td.act .btn + .btn{margin-left:2px}
@@ -297,23 +302,16 @@
   /* Fila «en pausa» (baja temporal): atenuada y con fondo tenue. */
   table.rejilla tbody tr.pausada{opacity:.6; background:var(--surface-2)}
   table.rejilla tbody tr.pausada.marcada{opacity:.72}
-  table.rejilla tbody tr:hover{background:transparent}
   /* selección y etiquetas en bloque */
   table.rejilla th.sel-col, table.rejilla td.sel-col{width:38px; text-align:center; padding:0}
   table.rejilla .sel, table.rejilla .selall{width:17px; height:17px; min-width:0; padding:0; accent-color:var(--primary); cursor:pointer; margin:0; box-shadow:none}
   table.rejilla tbody tr.marcada{background:var(--primary-soft)}
 
-  /* Claustro: ocupa todo el ancho de la tarjeta y reparte el espacio; cada
-     columna tiene un mínimo realista (si no cabe, la tabla hace scroll). */
-  table.rejilla.claustro{min-width:0; width:100%}
+  /* Claustro: columnas ajustadas al contenido (auto-fit por el atributo size de
+     cada input); si no cabe, la tabla hace scroll horizontal. */
+  table.rejilla.claustro{min-width:0; width:auto}
   table.rejilla.claustro th.sel-col, table.rejilla.claustro td.sel-col{width:22px; padding:0}
   table.rejilla.claustro .sel, table.rejilla.claustro .selall{width:14px; height:14px}
-  table.rejilla.claustro td input[data-k]{min-width:90px}
-  table.rejilla.claustro td:nth-child(2) input[data-k]{min-width:120px}  /* Nombre */
-  table.rejilla.claustro td:nth-child(3) input[data-k]{min-width:130px}  /* Apellidos */
-  table.rejilla.claustro td:nth-child(4) input[data-k]{min-width:82px}   /* Alias */
-  table.rejilla.claustro td:nth-child(5) input[data-k]{min-width:190px}  /* E-mail */
-  table.rejilla.claustro td:nth-child(6) input[data-k]{min-width:100px}  /* Teléfono */
 
   /* Rejilla «mis» (Google contacts y propios): sin casilla, ocupa todo el ancho de la caja. */
   table.rejilla.mis{min-width:0; width:100%}
