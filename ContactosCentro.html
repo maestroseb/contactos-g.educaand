@@ -64,11 +64,18 @@ window.TABS.contactosCentro = {
       cuenta.textContent = reales.length + (reales.length===1?' persona':' personas') + (pausadas ? ' · '+pausadas+' en pausa' : '');
     }
     function aplicarBusqueda(){
+      var visibles = 0;
       Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
         var f = filaId(tr.getAttribute('data-id'));
         tr.hidden = !!f && !(pasaPausa(f) && coincideBusqueda(textoFila(f), busqueda));
+        if(!tr.hidden) visibles++;
       });
       aplicarZebra(zona.querySelector('tbody'));   // rayado solo sobre lo visible
+      // Mensaje de «sin resultados» cuando un filtro/búsqueda oculta todo.
+      var filtrando = !!busqueda || filtroPausa !== 'todas';
+      var vacio = cont.querySelector('#claustroVacio'), tabla = zona.querySelector('.tablewrap');
+      if(vacio) vacio.hidden = !(filtrando && visibles === 0);
+      if(tabla) tabla.hidden = (filtrando && visibles === 0);
       actualizarCuenta();
     }
 
@@ -360,7 +367,10 @@ window.TABS.contactosCentro = {
 
     /* ---------- rejilla ---------- */
     function renderGrid(){
-      var html = '<div class="tablewrap"><table class="rejilla claustro'+(armado?' asignando':'')+'"><thead><tr>'+
+      var html = '<div class="tablewrap"><table class="rejilla claustro'+(armado?' asignando':'')+'">'+
+        '<colgroup><col style="width:3%"><col style="width:12%"><col style="width:13%"><col style="width:8%">'+
+        '<col style="width:15%"><col style="width:9%"><col style="width:12%"><col style="width:21%"><col style="width:7%"></colgroup>'+
+        '<thead><tr>'+
         '<th class="sel-col"><input type="checkbox" class="selall" title="Marcar todas"></th>'+
         '<th>Nombre</th><th>Apellidos</th><th>Alias</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas</th><th></th>'+
         '</tr></thead><tbody>'+
@@ -375,13 +385,14 @@ window.TABS.contactosCentro = {
               '<button class="btn danger sm icononly bdel" title="Quitar fila">'+icon('borrar')+'</button>'+
             '</td>'+
           '</tr>';
-        }).join('')+'</tbody></table></div>';
+        }).join('')+'</tbody></table></div>'+
+        '<p class="muted grid-vacio" id="claustroVacio" hidden>No hay personas que coincidan con la búsqueda o el filtro.</p>';
       zona.innerHTML = html;
 
       var tabla = zona.querySelector('table');
       // inputs de texto
       Array.prototype.forEach.call(zona.querySelectorAll('input[data-k]'), function(inp){
-        if(inp.getAttribute('data-k')==='puesto') armarChipInput(inp); else autofitInput(inp);
+        if(inp.getAttribute('data-k')==='puesto') armarChipInput(inp);
         inp.title = inp.value;   // al pasar el ratón se ve el valor completo aunque la columna lo recorte
         inp.oninput = function(){ var f=fila(inp); if(f) f[inp.getAttribute('data-k')] = inp.value; inp.title = inp.value; revisarClaustro(); };
       });
