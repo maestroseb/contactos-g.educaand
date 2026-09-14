@@ -68,6 +68,7 @@ window.TABS.contactosCentro = {
         var f = filaId(tr.getAttribute('data-id'));
         tr.hidden = !!f && !(pasaPausa(f) && coincideBusqueda(textoFila(f), busqueda));
       });
+      aplicarZebra(zona.querySelector('tbody'));   // rayado solo sobre lo visible
       actualizarCuenta();
     }
 
