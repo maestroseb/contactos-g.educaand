@@ -17,7 +17,10 @@ window.TABS.misContactos = {
       '<div class="card">',
         '<div class="card-head">',
           '<h2>'+icon('correo')+'Mis contactos de Google</h2>',
-          '<button class="btn" id="bTraer">'+icon('sync')+'Traer mis contactos</button>',
+          '<div class="row">',
+            '<button class="btn sm" id="bCSVmis">'+icon('descargar')+'Descargar CSV</button>',
+            '<button class="btn" id="bTraer">'+icon('sync')+'Traer mis contactos</button>',
+          '</div>',
         '</div>',
         '<p class="desc">Trae tus contactos de Google para revisarlos, editarlos o eliminarlos. Los cambios se acumulan y se aplican a tu cuenta en bloque al pulsar «Guardar cambios».</p>',
         '<div id="misBuscador"></div>',
@@ -40,6 +43,7 @@ window.TABS.misContactos = {
         '<p class="muted grid-vacio" id="propVacio" hidden>No hay contactos propios que coincidan con la búsqueda.</p>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir fila</button>',
+          '<button class="btn sm" id="bCSVprop">'+icon('descargar')+'Descargar CSV</button>',
           '<button class="btn danger sm" id="bVaciarPropios" style="margin-left:auto">'+icon('borrar')+'Vaciar lista</button>',
         '</div>',
         '<p class="status" id="sPropios"></p>',
@@ -180,6 +184,14 @@ window.TABS.misContactos = {
         });
     };
 
+    cont.querySelector('#bCSVmis').onclick = function(){
+      if(!MIS.length){ setStatus(sMis, 'Pulsa antes «Traer mis contactos».', 'err'); return; }
+      var cab = ['Nombre','Apellidos','Alias','E-mail','Teléfono','Puesto','Etiquetas'];
+      var filas = MIS.map(function(r){ return [r.nombre, r.apellidos, r.alias||'', r.email, r.telefono, r.puesto, (r.grupos||[]).join(', ')]; });
+      descargarCSV('mis-contactos-google.csv', [cab].concat(filas));
+      setStatus(sMis, 'Descargado un CSV con '+filas.length+' contactos.', 'ok');
+    };
+
     /* ===================== Contactos propios ===================== */
     tb = cont.querySelector('#tPropios tbody');
     (estado.contactosPropios||[]).forEach(function(c){ filaPropio(tb, c, revisar, sugerenciasEtq); });
@@ -191,6 +203,14 @@ window.TABS.misContactos = {
     aplicarZebra(tb);   // rayado inicial de la tabla de propios
 
     cont.querySelector('#bAdd').onclick = function(){ filaPropio(tb, {}, revisar, sugerenciasEtq); revisar(); };
+    cont.querySelector('#bCSVprop').onclick = function(){
+      var lista = leerPropios(tb);
+      if(!lista.length){ setStatus(sPropios, 'No hay contactos propios que descargar.', 'err'); return; }
+      var cab = ['Nombre','Apellidos','Alias','E-mail','Teléfono','Puesto','Etiquetas'];
+      var filas = lista.map(function(o){ return [o.nombre, o.apellidos, o.alias||'', o.email, o.telefono, o.puesto, (o.grupos||[]).join(', ')]; });
+      descargarCSV('mis-contactos-propios.csv', [cab].concat(filas));
+      setStatus(sPropios, 'Descargado un CSV con '+filas.length+' contactos.', 'ok');
+    };
     cont.querySelector('#bVaciarPropios').onclick = function(){
       modalConfirmar({ titulo:'Vaciar contactos propios', icono:'borrar', peligro:true, aceptar:'Vaciar',
         mensaje:'¿Vaciar TODA tu lista de contactos propios?\n\nSe quitarán de la tabla; el cambio se aplicará al pulsar «Guardar cambios».',
