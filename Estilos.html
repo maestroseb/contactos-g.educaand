@@ -287,11 +287,8 @@
   table.rejilla th{vertical-align:middle}
   /* Solo las celdas de texto (data-k); NUNCA la casilla de selección. */
   table.rejilla td input[data-k]{border:none; border-radius:0; background:transparent; width:100%;
-    min-width:120px; padding:9px 11px; font-size:13.5px; box-shadow:none}
-  table.rejilla td input[data-k]:focus{box-shadow:inset 0 0 0 2px var(--primary)}
-  /* Auto-ajuste: el input se dimensiona por su contenido (atributo size) y al
-     enfocarlo se expande para ver/editar el valor completo («revelar al clic»). */
-  table.rejilla td input[data-k].autofit{width:auto; min-width:0}
+    min-width:120px; padding:9px 11px; font-size:13.5px; box-shadow:none; text-overflow:ellipsis}
+  table.rejilla td input[data-k]:focus{box-shadow:inset 0 0 0 2px var(--primary); text-overflow:clip}
   /* Zebra: filas alternas con un fondo tenue (los estados marcada/pausada mandan).
      La clase la aplica JS solo a las filas VISIBLES, para que el patrón sea
      correcto tras filtrar (nth-child contaría también las ocultas). */
@@ -310,25 +307,21 @@
   table.rejilla .sel, table.rejilla .selall{width:17px; height:17px; min-width:0; padding:0; accent-color:var(--primary); cursor:pointer; margin:0; box-shadow:none}
   table.rejilla tbody tr.marcada{background:var(--primary-soft)}
 
-  /* Claustro: columnas ajustadas al contenido (auto-fit por el atributo size de
-     cada input); si no cabe, la tabla hace scroll horizontal. */
-  table.rejilla.claustro{min-width:0; width:auto}
-  table.rejilla.claustro th.sel-col, table.rejilla.claustro td.sel-col{width:22px; padding:0}
+  /* Columnas FIJAS a todo el ancho: la tabla siempre rellena la tarjeta y los
+     anchos no cambian al filtrar (los define el <colgroup>). El texto que no
+     cabe se recorta y se ve entero al enfocar el campo o con el tooltip. */
+  table.rejilla.claustro, table.rejilla.mis{table-layout:fixed; width:100%; min-width:660px}
+  table.rejilla.claustro th.sel-col, table.rejilla.claustro td.sel-col{padding:0}
   table.rejilla.claustro .sel, table.rejilla.claustro .selall{width:14px; height:14px}
-  /* Etiquetas: mínimo más estrecho (los chips envuelven) para que quepan todas
-     las columnas, incluidas pausar y papelera, sin scroll horizontal. */
-  table.rejilla.claustro td.etqs{min-width:140px}
-
-  /* Rejilla «mis» (Google contacts y propios): sin casilla, ocupa todo el ancho de la caja. */
-  table.rejilla.mis{min-width:0; width:100%}
-  table.rejilla.mis td input[data-k]{min-width:92px}
-  table.rejilla.mis td:nth-child(4) input[data-k]{min-width:158px}  /* E-mail */
-  table.rejilla.mis td:nth-child(5) input[data-k]{min-width:98px}   /* Teléfono */
+  table.rejilla.claustro td input[data-k], table.rejilla.mis td input[data-k]{width:100%; min-width:0}
+  table.rejilla.claustro td.etqs, table.rejilla.mis td.etqs{min-width:0}
+  /* Fila «sin resultados» de un filtro/búsqueda. */
+  .grid-vacio{margin:12px 2px; color:var(--ink-faint)}
 
   /* Puesto como «chip» editable: pastilla con color por contenido (se ajusta al texto vía size). */
   table.rejilla td.puesto-cell{padding:0 6px}
   /* Base: se ve como un campo normal (vacío o editándose, sin pastilla). */
-  table.rejilla td input[data-k].chipinput{width:auto; min-width:64px; margin:4px 0; padding:6px 10px;
+  table.rejilla td input[data-k].chipinput{width:auto; min-width:64px; max-width:100%; text-overflow:ellipsis; margin:4px 0; padding:6px 10px;
     font-family:var(--narrow); font-size:12.5px; font-weight:600; letter-spacing:.1px;
     border:1px solid transparent; border-radius:999px; background:transparent; color:var(--ink)}
   /* Con contenido y sin foco: pastilla de color. */

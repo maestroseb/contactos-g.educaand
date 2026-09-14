@@ -34,9 +34,10 @@ window.TABS.misContactos = {
         '</div>',
         '<p class="desc">Contactos que añades tú y que se guardan solo en tu cuenta. Se sincronizan junto con los del centro al pulsar «Sincronizar» arriba.</p>',
         '<div id="propBuscador"></div>',
-        '<div class="tablewrap"><table id="tPropios" class="rejilla mis"><thead><tr>',
+        '<div class="tablewrap"><table id="tPropios" class="rejilla mis">'+colsMis()+'<thead><tr>',
           '<th>Nombre</th><th>Apellidos</th><th>Alias</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas</th><th></th>',
         '</tr></thead><tbody></tbody></table></div>',
+        '<p class="muted grid-vacio" id="propVacio" hidden>No hay contactos propios que coincidan con la búsqueda.</p>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir fila</button>',
           '<button class="btn danger sm" id="bVaciarPropios" style="margin-left:auto">'+icon('borrar')+'Vaciar lista</button>',
@@ -70,11 +71,16 @@ window.TABS.misContactos = {
       cajaBusqueda('Buscar por nombre, alias, correo, teléfono, puesto o etiqueta…', function(v){ busquedaProp = v; aplicarBusquedaProp(); }));
     function aplicarBusquedaProp(){
       if(!tb) return;
+      var visibles = 0;
       Array.prototype.forEach.call(tb.querySelectorAll('tr'), function(tr){
         var vals = Array.prototype.map.call(tr.querySelectorAll('input[data-k]'), function(i){ return i.value; });
         tr.hidden = !coincideBusqueda(vals.concat(tr._grupos||[]).join(' '), busquedaProp);
+        if(!tr.hidden) visibles++;
       });
       aplicarZebra(tb);
+      var vacio = cont.querySelector('#propVacio'), tabla = tb.closest('.tablewrap');
+      if(vacio) vacio.hidden = !(busquedaProp && visibles === 0);
+      if(tabla) tabla.hidden = !!busquedaProp && visibles === 0;
     }
 
     /* ===================== Contactos de Google ===================== */
@@ -139,7 +145,7 @@ window.TABS.misContactos = {
       var filtradas = filtro ? MIS.filter(function(r){ return (r.grupos||[]).some(function(g){ return g.toLowerCase()===filtro.toLowerCase(); }); }) : MIS;
       if(busquedaMis) filtradas = filtradas.filter(function(r){ return coincideBusqueda([r.nombre,r.apellidos,r.alias,r.email,r.telefono,r.puesto].concat(r.grupos||[]).join(' '), busquedaMis); });
       if(!filtradas.length){ zona.innerHTML = '<p class="muted">'+(busquedaMis?'Ningún contacto coincide con la búsqueda.':'Ningún contacto con la etiqueta «'+esc(filtro)+'».')+'</p>'; return; }
-      zona.innerHTML = '<div class="tablewrap"><table class="rejilla mis"><thead><tr>'+
+      zona.innerHTML = '<div class="tablewrap"><table class="rejilla mis">'+colsMis()+'<thead><tr>'+
         '<th>Nombre</th><th>Apellidos</th><th>Alias</th><th>E-mail</th><th>Teléfono</th><th>Puesto</th><th>Etiquetas</th><th></th></tr></thead><tbody>'+
         filtradas.map(function(r){
           return '<tr data-id="'+r.id+'">'+
@@ -270,6 +276,13 @@ window.TABS.misContactos = {
     };
   }
 };
+
+/** Colgroup de las rejillas «mis» (Google y propios): columnas fijas a todo el
+ *  ancho, para que rellenen la tarjeta y no se muevan al filtrar. */
+function colsMis(){
+  return '<colgroup><col style="width:13%"><col style="width:14%"><col style="width:9%"><col style="width:17%">'+
+    '<col style="width:10%"><col style="width:13%"><col style="width:18%"><col style="width:6%"></colgroup>';
+}
 
 /** Construye una fila editable de contacto propio (con etiquetas como chips y
  *  autocompletado si se pasa `sugerencias`). */
