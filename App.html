@@ -371,6 +371,19 @@ function coincideBusqueda(texto, q){
   return normEtq_(q).split(/\s+/).filter(Boolean).every(function(w){ return n.indexOf(w) !== -1; });
 }
 
+/** Aplica el rayado «zebra» solo a las filas VISIBLES de un tbody (las ocultas
+ *  por un filtro no cuentan), para que el patrón par/impar sea correcto tras
+ *  filtrar. Usa la clase .zebra en lugar de :nth-child (que ignora lo oculto). */
+function aplicarZebra(tbody){
+  if(!tbody) return;
+  var i = 0;
+  Array.prototype.forEach.call(tbody.children, function(tr){
+    if(tr.nodeName !== 'TR') return;
+    if(tr.hidden){ tr.classList.remove('zebra'); return; }
+    tr.classList.toggle('zebra', (i++ % 2) === 1);
+  });
+}
+
 /** Construye una caja de búsqueda con lupa. onInput(valor) se llama al teclear.
  *  Devuelve el <div> contenedor (con .querySelector('input') accesible). */
 function cajaBusqueda(placeholder, onInput){

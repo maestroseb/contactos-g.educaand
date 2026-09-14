@@ -74,6 +74,7 @@ window.TABS.misContactos = {
         var vals = Array.prototype.map.call(tr.querySelectorAll('input[data-k]'), function(i){ return i.value; });
         tr.hidden = !coincideBusqueda(vals.concat(tr._grupos||[]).join(' '), busquedaProp);
       });
+      aplicarZebra(tb);
     }
 
     /* ===================== Contactos de Google ===================== */
@@ -158,6 +159,7 @@ window.TABS.misContactos = {
         tr.querySelector('.bdel').onclick = function(){ MIS = MIS.filter(function(x){ return x.id!==r.id; }); pintarFiltro(); pintarTabla(); revisar(); };
         chipCellEditor(tr.querySelector('.etqs'), r.grupos, function(){ pintarFiltro(); revisar(); }, { sugerencias: sugerenciasEtq });
       });
+      aplicarZebra(zona.querySelector('tbody'));
     }
 
     cont.querySelector('#bTraer').onclick = function(){
@@ -180,6 +182,7 @@ window.TABS.misContactos = {
     tb.addEventListener('input', revisar);
     tb.addEventListener('paste', function(){ setTimeout(revisar, 0); });
     propiosInicial = JSON.stringify(leerPropios(tb));
+    aplicarZebra(tb);   // rayado inicial de la tabla de propios
 
     cont.querySelector('#bAdd').onclick = function(){ filaPropio(tb, {}, revisar, sugerenciasEtq); revisar(); };
     cont.querySelector('#bVaciarPropios').onclick = function(){
@@ -216,6 +219,7 @@ window.TABS.misContactos = {
 
     /* ===================== Guardado unificado ===================== */
     function revisar(){
+      aplicarZebra(tb);   // reajusta el rayado tras añadir/quitar/editar filas propias
       var b = cont.querySelector('#misSave'); if(!b) return;
       var g = cambiosGoogle();
       b.hidden = !(g.editados.length || g.eliminados.length || propiosSucio());
