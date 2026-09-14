@@ -346,6 +346,26 @@ function coincideBusqueda(texto, q){
   return normEtq_(q).split(/\s+/).filter(Boolean).every(function(w){ return n.indexOf(w) !== -1; });
 }
 
+/**
+ * Descarga una matriz (filas × columnas; la 1ª fila son los encabezados) como
+ * archivo CSV. Usa «;» como separador y BOM UTF-8 para que Excel en español lo
+ * abra en columnas y con los acentos correctos.
+ */
+function descargarCSV(nombreArchivo, matriz){
+  var csv = (matriz || []).map(function(fila){
+    return (fila || []).map(function(c){
+      var s = String(c == null ? '' : c);
+      return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(';');
+  }).join('\r\n');
+  var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = nombreArchivo; a.style.display = 'none';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ if(a.parentNode) a.parentNode.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+}
+
 /** Aplica el rayado «zebra» solo a las filas VISIBLES de un tbody (las ocultas
  *  por un filtro no cuentan), para que el patrón par/impar sea correcto tras
  *  filtrar. Usa la clase .zebra en lugar de :nth-child (que ignora lo oculto). */

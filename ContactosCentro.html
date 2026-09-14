@@ -27,6 +27,7 @@ window.TABS.contactosCentro = {
         '<div id="gridZona"><p class="muted">Cargando claustro…</p></div>',
         '<div class="row" style="margin-top:14px">',
           '<button class="btn sm" id="bAdd">'+icon('add')+'Añadir persona</button>',
+          '<button class="btn sm" id="bCSV">'+icon('descargar')+'Descargar CSV</button>',
           '<button class="btn danger" id="bVaciar" style="margin-left:auto">'+icon('borrar')+'Vaciar lista</button>',
         '</div>',
         '<p class="status" id="sAdmin"></p>',
@@ -124,6 +125,15 @@ window.TABS.contactosCentro = {
 
     // acciones
     cont.querySelector('#bAdd').onclick = function(){ FILAS.push(filaVacia()); renderGrid(); };
+    cont.querySelector('#bCSV').onclick = function(){
+      var cab = ['Nombre','Apellidos','Alias','E-mail','Teléfono','Puesto','Etiquetas','Estado'];
+      var filas = FILAS.map(paraGuardar).filter(function(f){ return f.email||f.nombre; }).map(function(f){
+        return [f.nombre, f.apellidos, f.alias||'', f.email, f.telefono, f.puesto, (f.grupos||[]).join(', '), f.pausado?'En pausa':'Activo'];
+      });
+      if(!filas.length){ setStatus(cont.querySelector('#sAdmin'), 'No hay contactos que descargar.', 'err'); return; }
+      descargarCSV('claustro'+(estado.nombreCentro?'-'+estado.nombreCentro.replace(/[^\w.-]+/g,'_'):'')+'.csv', [cab].concat(filas));
+      setStatus(cont.querySelector('#sAdmin'), 'Descargado un CSV con '+filas.length+' contactos.', 'ok');
+    };
     cont.querySelector('#claustroSave').onclick = function(){
       var filas = FILAS.map(paraGuardar).filter(function(f){ return f.email||f.nombre; });
       correr(this, cont.querySelector('#sAdmin'), 'Guardando…',
