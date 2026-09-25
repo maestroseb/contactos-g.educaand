@@ -53,7 +53,7 @@ function sincronizar(opciones) {
   // Al sincronizar el centro, retira de Google las etiquetas de quien se haya
   // quitado del claustro o de un curso (bajas) o esté en pausa. No se borra el contacto.
   if (opciones.incluirCentro) {
-    try { retirarEtiquetasDeBajas_(filas, pausados, resumen); } catch (e) { Logger.log('retirarEtiquetasDeBajas_: ' + e.message); }
+    try { retirarEtiquetasDeBajas_(filas, pausados, resumen, !esAlumnoSolo); } catch (e) { Logger.log('retirarEtiquetasDeBajas_: ' + e.message); }
   }
   return resumen;
 }
@@ -64,10 +64,25 @@ function sincronizar(opciones) {
  * están «en pausa». NO borra el contacto ni sus demás datos: solo quita las
  * pertenencias a esas etiquetas y garantiza que sigue en «Mis contactos». Nunca
  * quita una etiqueta que la persona sigue teniendo en la lista actual.
+ *
+ * Si `borrarAlumnos` (sincroniza un docente), el alumnado dado de baja de un
+ * curso que ya no se sincroniza por ninguna otra vía se ELIMINA por completo
+ * de sus contactos (solo si aún tiene la etiqueta del curso, es decir, si llegó
+ * por la sincronización). Entre compañeros solo se retira la etiqueta.
  */
-function retirarEtiquetasDeBajas_(filasActuales, pausados, resumen) {
-  const bajas = leerBajas_().concat(leerBajasAlumnado_(), pausados || []);
+function retirarEtiquetasDeBajas_(filasActuales, pausados, resumen, borrarAlumnos) {
+  const bajasAlu = leerBajasAlumnado_();
+  const bajas = leerBajas_().concat(bajasAlu, pausados || []);
   if (!bajas.length) return;
+
+  // Alumnado dado de baja: email -> { etiquetaCurso: true }.
+  const alumnosBaja = {};
+  if (borrarAlumnos) bajasAlu.forEach(b => {
+    if (!b.alumno) return;
+    const set = alumnosBaja[String(b.email || '').trim().toLowerCase()] = {};
+    (b.grupos || []).forEach(g => { set[String(g || '').trim().toLowerCase()] = true; });
+  });
+  const aBorrar = [];
 
   // email -> { etiqueta: true } que se están sincronizando ahora: no se tocan.
   const activos = {};
@@ -104,6 +119,12 @@ function retirarEtiquetasDeBajas_(filasActuales, pausados, resumen) {
     if (!Object.keys(quitar).length) return;
 
     const membs = c.memberships || [];
+    // Alumno/a dado de baja que ya no se sincroniza por ninguna vía: se borra entero.
+    if (!emails.some(e => activos[e]) && emails.some(e => alumnosBaja[e] && membs.some(m => {
+      const rn = m.contactGroupMembership && m.contactGroupMembership.contactGroupResourceName;
+      return rn && alumnosBaja[e][(nombrePorRN[rn] || '').trim().toLowerCase()];
+    }))) { aBorrar.push(c.resourceName); return; }
+
     const nuevas = membs.filter(m => {
       const rn = m.contactGroupMembership && m.contactGroupMembership.contactGroupResourceName;
       if (!rn) return true;                                   // conserva pertenencias que no sean de grupo
@@ -112,14 +133,20 @@ function retirarEtiquetasDeBajas_(filasActuales, pausados, resumen) {
     });
     if (nuevas.length === membs.length) return;               // no tenía esas etiquetas
 
-    // Garantiza que sigue en «Mis contactos» (para que no desaparezca del móvil).
-    const tieneMy = nuevas.some(m => m.contactGroupMembership &&
-      m.contactGroupMembership.contactGroupResourceName === 'contactGroups/myContacts');
-    if (!tieneMy) nuevas.push(MEMB_MYCONTACTS_);
+    // Si se queda sin ninguna etiqueta, se deja en «Mis contactos» para que no
+    // desaparezca (el alumnado con etiqueta nunca va a «Mis contactos»).
+    if (!nuevas.some(m => m.contactGroupMembership)) nuevas.push(MEMB_MYCONTACTS_);
 
     aActualizar.push({ resourceName: c.resourceName, persona: { resourceName: c.resourceName, etag: c.etag, memberships: nuevas } });
   });
-  if (!aActualizar.length) return;
+  if (aBorrar.length) {
+    const fallB = ejecutarPorLotes_(aBorrar, 200,
+      function (chunk) { People.People.batchDeleteContacts({ resourceNames: chunk }); },
+      function (rn) { People.People.deleteContact(rn); });
+    resumen.eliminados = (resumen.eliminados || 0) + aBorrar.length - fallB.length;
+    resumen.errores += fallB.length;
+  }
+  if (!aActualizar.length) { if (aBorrar.length) { try { eliminarGruposVacios_(); } catch (e) {} } return; }
 
   const fall = ejecutarPorLotes_(aActualizar, 200,
     function (chunk) {
@@ -184,8 +211,9 @@ function procesarContactos_(filas) {
       return { contactGroupMembership: { contactGroupResourceName: idGrupo } };
     });
 
-    // Siempre en «Mis contactos» además de en sus etiquetas (para el móvil).
-    const memb = grupos.length ? nuevasMemb.concat([MEMB_MYCONTACTS_]) : [MEMB_MYCONTACTS_];
+    // En «Mis contactos» además de en sus etiquetas (para el móvil), salvo el alumnado.
+    const memb = (f.alumno && grupos.length) ? nuevasMemb
+      : (grupos.length ? nuevasMemb.concat([MEMB_MYCONTACTS_]) : [MEMB_MYCONTACTS_]);
 
     const existente = emailsExistentes[email];
     if (existente) {

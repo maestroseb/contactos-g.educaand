@@ -122,6 +122,7 @@ function mensajeError(e){
 }
 function resumenTexto(r){
   return 'Hecho: '+r.creados+' creados, '+r.actualizados+' actualizados, '+r.sinCambios+' sin cambios'+
+    (r.eliminados?', '+r.eliminados+' eliminados':'')+
     (r.omitidos?', '+r.omitidos+' omitidos':'')+
     (r.errores?', '+r.errores+' con error':'')+'.';
 }

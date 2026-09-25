@@ -94,7 +94,7 @@ function contactosDeClase_(email) {
   cursosDeAlumno_(yo).forEach(curso => {
     (curso.alumnos || []).forEach(a => {
       if (!a.email || low_(a.email) === yo) return;
-      out.push({ nombre: a.nombre || '', apellidos: a.apellidos || '', email: low_(a.email), grupos: [curso.nombre] });
+      out.push({ nombre: a.nombre || '', apellidos: a.apellidos || '', email: low_(a.email), grupos: [curso.nombre], alumno: true });
     });
     const tutor = low_(curso.tutor);
     [tutor].concat((curso.profesores || []).map(low_)).filter(String).forEach(e => {
@@ -122,7 +122,7 @@ function contactosDeCursosDocente_(email) {
   permitidos.filter(c => sel.indexOf(c.id) !== -1).forEach(curso => {
     (curso.alumnos || []).forEach(a => {
       if (!a.email || low_(a.email) === yo) return;
-      out.push({ nombre: a.nombre || '', apellidos: a.apellidos || '', email: low_(a.email), grupos: [curso.nombre] });
+      out.push({ nombre: a.nombre || '', apellidos: a.apellidos || '', email: low_(a.email), grupos: [curso.nombre], alumno: true });
     });
   });
   return fusionarPorEmail_(out);
@@ -192,7 +192,10 @@ function registrarBajasCurso_(previo, nuevo) {
   const antes = pares(previo), despues = pares(nuevo);
   const ahora = Date.now();
   const bajas = {};
-  leerBajasAlumnado_().forEach(b => { bajas[low_(b.email)] = { grupos: b.grupos || [], ts: b.ts || ahora }; });
+  leerBajasAlumnado_().forEach(b => { bajas[low_(b.email)] = { grupos: b.grupos || [], ts: b.ts || ahora, alumno: !!b.alumno }; });
+  // Correos que eran alumnado del curso (para borrarlos del profesorado).
+  const eraAlumno = {};
+  ((previo && previo.alumnos) || []).forEach(a => { if (a.email) eraAlumno[low_(a.email)] = true; });
   // Quita de las bajas lo que vuelve a estar.
   Object.keys(despues).forEach(e => {
     if (!bajas[e]) return;
@@ -204,11 +207,12 @@ function registrarBajasCurso_(previo, nuevo) {
       if (despues[e] && despues[e][g]) return;
       const b = bajas[e] || (bajas[e] = { grupos: [], ts: ahora });
       if (b.grupos.indexOf(g) === -1) b.grupos.push(g);
+      if (eraAlumno[e]) b.alumno = true;
       b.ts = ahora;
     });
   });
   const lista = Object.keys(bajas).filter(e => bajas[e].grupos.length)
-    .map(e => ({ email: e, grupos: bajas[e].grupos, ts: bajas[e].ts }))
+    .map(e => ({ email: e, grupos: bajas[e].grupos, ts: bajas[e].ts, alumno: bajas[e].alumno || undefined }))
     .filter(b => (ahora - b.ts) < CADUCIDAD_BAJAS_)
     .sort((a, b) => b.ts - a.ts).slice(0, 1000);
   guardarTrozos_(PROP_BAJAS_ALU_PREFIJO, PROP_BAJAS_ALU_NUM, CACHE_BAJAS_ALU, lista);
