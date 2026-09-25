@@ -115,7 +115,7 @@ function setStatus(el, texto, tipo){
 }
 function mensajeError(e){
   var m=(e&&e.message)?e.message:String(e);
-  if(m.indexOf('NO_MIEMBRO')!==-1) return 'No puedes sincronizar los contactos del centro porque no perteneces al claustro.';
+  if(m.indexOf('NO_MIEMBRO')!==-1) return 'No puedes sincronizar los contactos del centro porque no perteneces al claustro ni al alumnado.';
   if(m.indexOf('NO_AUTORIZADO')!==-1) return 'No tienes permisos de administrador.';
   if(m.indexOf('NO_PRINCIPAL')!==-1) return 'Solo el administrador principal puede hacer esto.';
   return 'Se ha producido un error: '+m;
@@ -540,8 +540,22 @@ function pantallaError(e){
 function tabsOrdenadas(estado){
   return Object.keys(window.TABS)
     .map(function(k){ return Object.assign({key:k}, window.TABS[k]); })
-    .filter(function(t){ return !t.adminOnly || estado.esAdmin; })
+    .filter(function(t){ return tabVisible(t, estado); })
     .sort(function(a,b){ return (a.orden||99)-(b.orden||99); });
+}
+
+/** ¿Puede ver este usuario la pestaña? (adminOnly, o criterio propio `visible`). */
+function tabVisible(t, estado){
+  if(t.adminOnly && !estado.esAdmin) return false;
+  if(t.visible && !t.visible(estado)) return false;
+  return true;
+}
+
+/** Texto del rol para la cabecera. */
+function rolTexto(estado){
+  if(estado.esAdmin) return 'Administrador';
+  if(estado.rol === 'alumno') return 'Alumnado';
+  return estado.esTutor ? 'Tutor/a' : 'Profesorado';
 }
 
 function construirShell(estado, preferida){
@@ -585,7 +599,7 @@ function construirShell(estado, preferida){
               '<span class="uinfo">'+
                 '<b>'+esc(etiquetaUsuario)+'</b>'+
                 '<small class="'+(estado.esAdmin?'is-admin':'')+'">'+icon(estado.esAdmin?'config':'yo')+
-                  (estado.esAdmin?'Administrador':'Profesorado')+'</small>'+
+                  esc(rolTexto(estado))+'</small>'+
               '</span>'+
             '</div>'+
           '</div>'+
@@ -634,18 +648,25 @@ function construirShell(estado, preferida){
     lanzarSincronizacion(document.getElementById('hSync'), document.getElementById('syncStatus'),
       opciones, function(){ setTimeout(function(){ area.hidden=true; }, 3000); });
   }
-  // Conmutar sincronización diaria desde la cabecera.
+  // Conmutar sincronización diaria desde la cabecera. Al activarla se lanza
+  // además una sincronización inmediata para que los contactos aparezcan ya.
   document.getElementById('hDiaria').onclick = function(){
-    var activar = !estado.diariaActiva; this.disabled=true;
+    var btn = this, activar = !estado.diariaActiva; btn.disabled=true;
     var run=google.script.run
-      .withSuccessHandler(function(){ recargarApp(TAB_ACTIVA); })
-      .withFailureHandler(function(e){ modalAviso(mensajeError(e)); });
+      .withSuccessHandler(function(){
+        estado.diariaActiva = activar;
+        btn.classList.toggle('good', activar);
+        btn.innerHTML = icon('power')+(activar?'Diaria: activada':'Diaria: desactivada');
+        btn.disabled = false;
+        if(activar) ejecutarSync({incluirCentro:true, incluirPropios:true});
+      })
+      .withFailureHandler(function(e){ btn.disabled=false; modalAviso(mensajeError(e)); });
     if(activar) run.activarSincronizacionDiaria({incluirCentro:true, incluirPropios:true});
     else run.desactivarSincronizacionDiaria();
   };
 
   // Pestaña inicial: la preferida (si existe), o Configuración si falta, o la 1ª.
-  var primera = (preferida && window.TABS[preferida] && (!window.TABS[preferida].adminOnly || estado.esAdmin))
+  var primera = (preferida && window.TABS[preferida] && tabVisible(window.TABS[preferida], estado))
     ? preferida : (necesitaConfig ? 'configuracion' : tabs[0].key);
   irATab(primera);
 }

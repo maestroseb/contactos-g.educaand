@@ -5,7 +5,8 @@
  *  - Sin configurar + eres el admin  -> asistente de configuración.
  *  - Sin configurar + no eres admin  -> página de "en preparación".
  *  - Configurado + admin             -> panel de administración.
- *  - Configurado + miembro claustro  -> vista de profesorado.
+ *  - Configurado + miembro claustro  -> vista de profesorado (y Alumnado si es tutor).
+ *  - Configurado + alumno de un curso -> vista de alumnado (solo su clase).
  *  - Configurado + ajeno             -> acceso denegado.
  */
 
@@ -19,7 +20,7 @@ function doGet(e) {
     return paginaDenegado_(email, 'La aplicación de este centro todavía se está configurando. Vuelve a intentarlo más tarde.');
   }
 
-  if (!esAdmin && !esMiembroClaustro_(email)) {
+  if (!esAdmin && !esMiembroClaustro_(email) && !esAlumno_(email)) {
     return paginaDenegado_(email, null);
   }
   return paginaApp_(email, esAdmin);
@@ -68,21 +69,25 @@ function getEstadoInicial() {
   const email = correoUsuarioActual_();
   const cfg = getConfig_() || {};   // una sola lectura (cacheada)
   const perfil = perfilUsuarioActual_(email);
+  const rol = rolDe_(email);
+  const alumno = rol === 'alumno';
   return {
     email: email,
     nombreUsuario: perfil.nombre,
     fotoUsuario: perfil.foto,
-    esAdmin: esAdmin_(email),
+    esAdmin: rol === 'admin',
+    rol: rol,
+    esTutor: !alumno && esTutor_(email),
     configurado: !!cfg.completo,
     nombreApp: PARAMS.nombreApp,
     icono: PARAMS.icono,
     version: PARAMS.version,
     nombreCentro: (cfg.nombreCentro ? String(cfg.nombreCentro).trim() : ''),
-    gruposCentro: gruposDelCentro_(),
+    gruposCentro: alumno ? gruposDe_(contactosDeClase_(email)) : gruposDelCentro_(),
     contactosPropios: leerContactosPropios_(),
     diariaActiva: tieneSincronizacionDiaria(),
-    etiquetasSugeridas: etiquetasSugeridasDe_(cfg.etiquetas),
-    etiquetasCats: cfg.etiquetas || {}
+    etiquetasSugeridas: alumno ? [] : etiquetasSugeridasDe_(cfg.etiquetas),
+    etiquetasCats: alumno ? {} : (cfg.etiquetas || {})
   };
 }
 

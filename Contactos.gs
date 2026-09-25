@@ -19,17 +19,19 @@ function sincronizar(opciones) {
   opciones = opciones || { incluirCentro: true, incluirPropios: true };
 
   // Para sincronizar los contactos del centro hay que pertenecer al claustro
-  // (grupo de Google o lista administrada). El admin siempre puede.
+  // (grupo de Google o lista administrada) o al alumnado de algún curso. El
+  // alumnado solo recibe a su clase, su tutor/a y su profesorado.
   const email = correoUsuarioActual_();
-  if (opciones.incluirCentro && !esAdmin_(email) && !esMiembroClaustro_(email)) {
+  if (opciones.incluirCentro && !puedeSincronizarCentro_(email)) {
     throw new Error('NO_MIEMBRO');
   }
+  const esAlumnoSolo = opciones.incluirCentro && !esAdmin_(email) && !esMiembroClaustro_(email);
 
   // Reunir la lista de contactos a sincronizar.
   let filas = [];
   let pausados = [];
   if (opciones.incluirCentro) {
-    const centro = leerContactosCentro_();
+    const centro = esAlumnoSolo ? contactosDeClase_(email) : leerContactosCentro_();
     // Personas «en pausa»: se quedan en el listado pero NO se sincronizan; se les
     // retiran las etiquetas (baja temporal reversible). Se recogen de la lista
     // completa, independientemente del filtro por grupos.
@@ -48,7 +50,7 @@ function sincronizar(opciones) {
   const resumen = procesarContactos_(filas);
   // Al sincronizar el centro, retira de Google las etiquetas de quien se haya
   // quitado del claustro (bajas) o esté en pausa. No se borra el contacto.
-  if (opciones.incluirCentro) {
+  if (opciones.incluirCentro && !esAlumnoSolo) {
     try { retirarEtiquetasDeBajas_(filas, pausados, resumen); } catch (e) { Logger.log('retirarEtiquetasDeBajas_: ' + e.message); }
   }
   return resumen;

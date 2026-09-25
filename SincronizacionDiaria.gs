@@ -32,7 +32,7 @@ function invalidarCacheDiaria_() {
  */
 function activarSincronizacionDiaria(opciones) {
   const email = correoUsuarioActual_();
-  if (opciones && opciones.incluirCentro && !esAdmin_(email) && !esMiembroClaustro_(email)) {
+  if (opciones && opciones.incluirCentro && !puedeSincronizarCentro_(email)) {
     throw new Error('NO_MIEMBRO');
   }
 
@@ -76,7 +76,7 @@ function ejecutarSincronizacionDiaria() {
     const opciones = raw ? JSON.parse(raw) : { incluirCentro: true, incluirPropios: true };
 
     const email = correoUsuarioActual_();
-    if (opciones.incluirCentro && !esAdmin_(email) && !esMiembroClaustro_(email)) {
+    if (opciones.incluirCentro && !puedeSincronizarCentro_(email)) {
       notificarBajaDelGrupo_();
       desactivarSincronizacionDiaria_();
       return;
@@ -93,7 +93,7 @@ function notificarBajaDelGrupo_() {
   const centro = nombreCentro_();
   const html =
     '<p>¡Hola!</p>' +
-    '<p>Hemos detectado que ya no formas parte del grupo del profesorado del <strong>' +
+    '<p>Hemos detectado que ya no formas parte del profesorado ni del alumnado del <strong>' +
     centro + '</strong>, por lo que hemos detenido la sincronización automática de contactos.</p>' +
     '<p>Si crees que es un error o has cambiado de centro, ponte en contacto con tu administrador.</p>' +
     '<p>Gracias por usar <strong>' + PARAMS.nombreApp + '</strong>.</p>';

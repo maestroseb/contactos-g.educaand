@@ -1,0 +1,250 @@
+<script>
+/** Pestaña ALUMNADO (súper admin y tutores).
+ *  - Súper admin: ve todos los cursos, los filtra, crea/borra y asigna tutor/a.
+ *  - Tutor/a: gestiona solo su curso: alumnado y profesorado que lo imparte.
+ *  El alumnado sincroniza a sus compañeros, su tutor/a y ese profesorado. */
+window.TABS = window.TABS || {};
+window.TABS.alumnado = {
+  orden: 4, label: 'Alumnado', icono: 'curso',
+  titulo: 'Alumnado', sub: 'Cursos, tutorías y profesorado de cada clase',
+  visible: function(estado){ return estado.esAdmin || estado.esTutor; },
+  render: function (cont, estado) {
+    var DATA = null, filtro = '', nuevos = 0;
+
+    cont.innerHTML =
+      '<div class="card">'+
+        '<div class="card-head">'+
+          '<h2>'+icon('curso')+'Cursos</h2>'+
+          '<div class="row" id="aluAcc"></div>'+
+        '</div>'+
+        '<p class="desc" id="aluDesc"></p>'+
+        '<p class="status" id="aluSt"></p>'+
+      '</div>'+
+      '<div id="aluCursos"><p class="muted">Cargando…</p></div>';
+    var st = cont.querySelector('#aluSt');
+
+    function cargar(){
+      setStatus(st, 'Cargando cursos…', 'busy');
+      google.script.run
+        .withSuccessHandler(function(d){ DATA = d; setStatus(st, '', null); pintarCabecera(); pintar(); })
+        .withFailureHandler(function(e){ setStatus(st, mensajeError(e), 'err'); })
+        .getAlumnado();
+    }
+
+    function nombreDe(email){
+      var c = (DATA.claustro||[]).filter(function(x){ return x.email===email; })[0];
+      if(!c) return email || '';
+      var n = [c.nombre, c.apellidos].filter(Boolean).join(' ');
+      return n ? n+' ('+email+')' : email;
+    }
+
+    function pintarCabecera(){
+      cont.querySelector('#aluDesc').innerHTML = DATA.esAdmin
+        ? 'Crea los cursos y asigna su <b>tutor/a</b>. Cada tutor/a gestiona el alumnado de su clase y elige el profesorado que la imparte. El alumnado, al entrar en la web, sincroniza solo a sus compañeros, a su tutor/a y a ese profesorado.'
+        : 'Añade el alumnado de tu tutoría y marca el profesorado que imparte clase en ella. Tu alumnado, al entrar en la web, sincronizará solo a sus compañeros, a ti y a ese profesorado.';
+      var acc = cont.querySelector('#aluAcc');
+      var cursos = DATA.cursos || [];
+      var html = '';
+      if(DATA.esAdmin || cursos.length > 1){
+        html += '<select id="aluFiltro" style="width:auto;min-width:200px;padding:7px 10px">'+
+          '<option value="">Todos los cursos ('+cursos.length+')</option>'+
+          cursos.map(function(c){ return '<option value="'+esc(c.id)+'"'+(filtro===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
+        '</select>';
+      }
+      if(DATA.esAdmin) html += '<button class="btn sm primary" id="aluNuevo">'+icon('add')+'Nuevo curso</button>';
+      acc.innerHTML = html;
+      var sel = acc.querySelector('#aluFiltro');
+      if(sel) sel.onchange = function(){ filtro = sel.value; pintar(); };
+      var bn = acc.querySelector('#aluNuevo');
+      if(bn) bn.onclick = function(){
+        var zona = cont.querySelector('#aluCursos');
+        if(!zona.querySelector('.card')) zona.innerHTML = '';
+        var card = tarjeta({ id:null, nombre:'', tutor:'', profesores:[], alumnos:[] }, 'n'+(nuevos++));
+        zona.insertBefore(card, zona.firstChild);
+        var inp = card.querySelector('.cNombre'); if(inp) inp.focus();
+      };
+    }
+
+    function pintar(){
+      var zona = cont.querySelector('#aluCursos');
+      var cursos = (DATA.cursos||[]).filter(function(c){ return !filtro || c.id===filtro; });
+      zona.innerHTML = '';
+      if(!cursos.length){
+        zona.innerHTML = '<div class="card"><p class="muted">'+(DATA.esAdmin?'Aún no hay cursos. Pulsa «Nuevo curso» para crear el primero.':'No tienes ninguna tutoría asignada.')+'</p></div>';
+        return;
+      }
+      cursos.forEach(function(c){ zona.appendChild(tarjeta(c, c.id)); });
+    }
+
+    /** Tarjeta editable de un curso. */
+    function tarjeta(curso, key){
+      var m = JSON.parse(JSON.stringify(curso));
+      var card = document.createElement('div');
+      card.className = 'card';
+      var admin = DATA.esAdmin;
+      var opcionesTutor = '<option value="">— Sin tutor/a —</option>'+
+        (DATA.claustro||[]).map(function(p){
+          return '<option value="'+esc(p.email)+'"'+(p.email===m.tutor?' selected':'')+'>'+esc(nombreDe(p.email))+'</option>';
+        }).join('');
+
+      card.innerHTML =
+        '<div class="card-head">'+
+          '<h2>'+icon('curso')+'<span class="cTit">'+esc(m.nombre||'Nuevo curso')+'</span></h2>'+
+          '<div class="row">'+
+            '<button class="btn sm cImp">'+icon('importar')+'Importar alumnado…</button>'+
+            '<button class="btn sm cCSV">'+icon('descargar')+'Descargar CSV</button>'+
+            (admin?'<button class="btn danger sm icononly cDel" title="Eliminar curso">'+icon('borrar')+'</button>':'')+
+          '</div>'+
+        '</div>'+
+        (admin
+          ? '<div class="row" style="gap:14px;align-items:flex-end;margin-bottom:6px">'+
+              '<label class="fld" style="flex:1;min-width:160px"><span>Curso</span><input class="cNombre" placeholder="p. ej. 3º ESO A" value="'+esc(m.nombre)+'"></label>'+
+              '<label class="fld" style="flex:2;min-width:220px"><span>Tutor/a</span><select class="cTutor">'+opcionesTutor+'</select></label>'+
+            '</div>'
+          : '<p class="desc"><b>Tutor/a:</b> '+esc(nombreDe(m.tutor))+'</p>')+
+        '<h3 style="margin:6px 0 8px;font-size:14px">Profesorado del curso <span class="muted cNProf"></span></h3>'+
+        '<p class="desc">Marca el profesorado que da clase en este curso (el tutor/a se incluye siempre).</p>'+
+        '<div class="cProfBusca"></div>'+
+        '<div class="chips cProf" style="max-height:190px;overflow-y:auto;margin:8px 0 16px"></div>'+
+        '<h3 style="margin:6px 0 8px;font-size:14px">Alumnado <span class="muted cNAlu"></span></h3>'+
+        '<div class="tablewrap"><table class="rejilla mis">'+
+          '<colgroup><col style="width:25%"><col style="width:32%"><col style="width:37%"><col style="width:6%"></colgroup>'+
+          '<thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th></th></tr></thead><tbody></tbody></table></div>'+
+        '<div class="row" style="margin-top:14px">'+
+          '<button class="btn sm cAdd">'+icon('add')+'Añadir alumno/a</button>'+
+          '<button class="btn primary sm cSave" style="margin-left:auto">'+icon('guardar')+'Guardar curso</button>'+
+        '</div>'+
+        '<p class="status cSt"></p>';
+
+      var tb = card.querySelector('tbody'), cst = card.querySelector('.cSt');
+      var busqProf = '';
+
+      function tutorActual(){ var s = card.querySelector('.cTutor'); return s ? s.value : m.tutor; }
+
+      function pintarProfes(){
+        var tutor = tutorActual();
+        var box = card.querySelector('.cProf');
+        var lista = (DATA.claustro||[]).filter(function(p){ return p.email !== tutor; });
+        box.innerHTML = lista.length ? lista.map(function(p){
+          var marc = m.profesores.indexOf(p.email) !== -1;
+          var txt = [p.nombre, p.apellidos].filter(Boolean).join(' ') || p.email;
+          var vis = coincideBusqueda([txt, p.email, p.puesto].join(' '), busqProf);
+          return '<label'+(vis?'':' hidden')+' title="'+esc(p.email)+'"><input type="checkbox" value="'+esc(p.email)+'"'+(marc?' checked':'')+'> '+
+            esc(txt)+(p.puesto?' <span class="muted">· '+esc(p.puesto)+'</span>':'')+'</label>';
+        }).join('') : '<p class="muted">El claustro está vacío.</p>';
+        Array.prototype.forEach.call(box.querySelectorAll('input[type=checkbox]'), function(ch){
+          ch.onchange = function(){
+            var i = m.profesores.indexOf(ch.value);
+            if(ch.checked && i === -1) m.profesores.push(ch.value);
+            if(!ch.checked && i !== -1) m.profesores.splice(i, 1);
+            contar();
+          };
+        });
+        contar();
+      }
+
+      function fila(a){
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td><input data-k="nombre" value="'+esc(a.nombre||'')+'"></td>'+
+          '<td><input data-k="apellidos" value="'+esc(a.apellidos||'')+'"></td>'+
+          '<td><input data-k="email" value="'+esc(a.email||'')+'"></td>'+
+          '<td class="act"><button class="btn danger sm icononly" title="Quitar">'+icon('borrar')+'</button></td>';
+        tr.querySelector('.act button').onclick = function(){ tr.remove(); aplicarZebra(tb); contar(); };
+        tb.appendChild(tr);
+      }
+      function leerAlumnos(){
+        return Array.prototype.map.call(tb.querySelectorAll('tr'), function(tr){
+          var o = {};
+          Array.prototype.forEach.call(tr.querySelectorAll('input[data-k]'), function(i){ o[i.getAttribute('data-k')] = i.value.trim(); });
+          return o;
+        }).filter(function(o){ return o.email || o.nombre || o.apellidos; });
+      }
+      function contar(){
+        var tutor = tutorActual();
+        card.querySelector('.cNProf').textContent = '('+(m.profesores.filter(function(e){ return e!==tutor; }).length + (tutor?1:0))+')';
+        card.querySelector('.cNAlu').textContent = '('+leerAlumnos().length+')';
+      }
+
+      (m.alumnos||[]).forEach(fila);
+      if(!tb.children.length) fila({});
+      habilitarPegado(tb, function(t, o){ fila(o); });
+      tb.addEventListener('input', contar);
+      aplicarZebra(tb);
+
+      card.querySelector('.cProfBusca').appendChild(cajaBusqueda('Buscar profesorado…', function(v){ busqProf = v; pintarProfes(); }));
+      var selT = card.querySelector('.cTutor');
+      if(selT) selT.onchange = pintarProfes;
+      var inpN = card.querySelector('.cNombre');
+      if(inpN) inpN.oninput = function(){ card.querySelector('.cTit').textContent = inpN.value || 'Nuevo curso'; };
+      pintarProfes();
+
+      card.querySelector('.cAdd').onclick = function(){ fila({}); aplicarZebra(tb); };
+
+      card.querySelector('.cImp').onclick = function(){
+        modalPegar({
+          titulo: 'Importar alumnado',
+          desc: 'Sube un Excel o CSV (p. ej. el listado del alumnado de Séneca) o pega el listado. Se detectan nombre, apellidos y correo. Se añaden a la tabla; luego pulsa «Guardar curso».',
+          placeholder: 'Apellidos, Nombre\tcorreo@g.educaand.es',
+          aceptar: 'Añadir a la tabla',
+          onAceptar: function(texto, ctx){
+            if(!texto.trim()){ setStatus(ctx.st, 'Pega antes las filas.', 'err'); return; }
+            ctx.btn.disabled = true; setStatus(ctx.st, 'Procesando…', 'busy');
+            google.script.run
+              .withSuccessHandler(function(lista){
+                if(!leerAlumnos().length) tb.innerHTML = '';
+                (lista||[]).forEach(function(c){ fila({ nombre:c.nombre, apellidos:c.apellidos, email:c.email }); });
+                aplicarZebra(tb); contar(); ctx.cerrar();
+                setStatus(cst, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar curso».', 'ok');
+              })
+              .withFailureHandler(function(e){ ctx.btn.disabled=false; setStatus(ctx.st, mensajeError(e), 'err'); })
+              .parsearPegado(texto);
+          }
+        });
+      };
+
+      card.querySelector('.cCSV').onclick = function(){
+        var al = leerAlumnos();
+        if(!al.length){ setStatus(cst, 'No hay alumnado que descargar.', 'err'); return; }
+        descargarCSV('alumnado-'+(m.nombre||'curso').replace(/[^\wÀ-ÿ-]+/g,'_')+'.csv',
+          [['Nombre','Apellidos','E-mail']].concat(al.map(function(a){ return [a.nombre, a.apellidos, a.email]; })));
+      };
+
+      var bDel = card.querySelector('.cDel');
+      if(bDel) bDel.onclick = function(){
+        if(!m.id){ card.remove(); return; }
+        modalConfirmar({ titulo:'Eliminar curso', icono:'borrar', peligro:true, aceptar:'Eliminar',
+          mensaje:'¿Eliminar el curso «'+m.nombre+'» con su alumnado?\n\nSu alumnado dejará de poder entrar en la web.',
+          onAceptar:function(){
+            correr(bDel, cst, 'Eliminando…', function(r){ r.eliminarCurso(m.id); }, function(){
+              DATA.cursos = DATA.cursos.filter(function(c){ return c.id!==m.id; });
+              if(filtro===m.id) filtro = '';
+              pintarCabecera(); card.remove();
+              if(!cont.querySelector('#aluCursos .card')) pintar();
+            });
+          }});
+      };
+
+      card.querySelector('.cSave').onclick = function(){
+        var datos = { id:m.id, nombre: inpN ? inpN.value.trim() : m.nombre, tutor: tutorActual(),
+          profesores: m.profesores.slice(), alumnos: leerAlumnos() };
+        var sinCorreo = datos.alumnos.filter(function(a){ return !a.email; }).length;
+        correr(this, cst, 'Guardando…', function(r){ r.guardarCurso(datos); }, function(res){
+          var nuevo = !m.id;
+          m = res;
+          var i = -1; DATA.cursos.forEach(function(c, k){ if(c.id===res.id) i = k; });
+          if(i === -1) DATA.cursos.push(res); else DATA.cursos[i] = res;
+          DATA.cursos.sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre), 'es', { numeric:true }); });
+          if(nuevo) pintarCabecera();
+          else { var o = cont.querySelector('#aluFiltro option[value="'+res.id+'"]'); if(o) o.textContent = res.nombre; }
+          setStatus(cst, 'Curso guardado: '+res.alumnos.length+' alumnos/as'+(sinCorreo?' ('+sinCorreo+' sin correo: no podrán sincronizar)':'')+'.', sinCorreo?'err':'ok');
+        });
+      };
+
+      return card;
+    }
+
+    cargar();
+  }
+};
+</script>

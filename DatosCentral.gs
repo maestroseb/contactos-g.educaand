@@ -12,8 +12,13 @@ function leerContactosCentro_() {
 
 /** Etiquetas/grupos presentes en los contactos del centro (para la vista). */
 function gruposDelCentro_() {
+  return gruposDe_(leerContactosCentro_());
+}
+
+/** Etiquetas presentes en una lista de contactos, ordenadas. */
+function gruposDe_(lista) {
   const set = {};
-  leerContactosCentro_().forEach(c => (c.grupos || []).forEach(g => { if (g) set[g] = true; }));
+  (lista || []).forEach(c => (c.grupos || []).forEach(g => { if (g) set[g] = true; }));
   return Object.keys(set).sort((a, b) => a.localeCompare(b));
 }
 

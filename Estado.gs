@@ -158,53 +158,65 @@ function nombreCentro_() {
 
 /** Lee la lista de contactos del centro desde el almacén (con caché). */
 function leerContactosCentroStore_() {
+  return leerTrozos_(PROP_CONTACTOS_PREFIJO, PROP_CONTACTOS_NUM, CACHE_CONTACTOS);
+}
+
+/** Guarda la lista de contactos del centro en el almacén (troceada + caché). */
+function guardarContactosCentroStore_(lista) {
+  guardarTrozos_(PROP_CONTACTOS_PREFIJO, PROP_CONTACTOS_NUM, CACHE_CONTACTOS, lista);
+  return (lista || []).length;
+}
+
+/* --------------------- Almacén troceado genérico --------------------- *
+ * Un array JSON guardado en varias propiedades (prefijo + i) para no superar
+ * el límite por propiedad, con copia en la caché compartida del script. */
+
+function leerTrozos_(prefijo, propNum, claveCache) {
   const cache = cacheScript_();
   if (cache) {
-    const c = cache.get(CACHE_CONTACTOS);
+    const c = cache.get(claveCache);
     if (c !== null) { try { return JSON.parse(c); } catch (e) {} }
   }
   const props = PropertiesService.getScriptProperties();
-  const n = parseInt(props.getProperty(PROP_CONTACTOS_NUM) || '0', 10);
+  const n = parseInt(props.getProperty(propNum) || '0', 10);
   let lista = [];
   if (n) {
     let json = '';
-    for (let i = 0; i < n; i++) json += (props.getProperty(PROP_CONTACTOS_PREFIJO + i) || '');
+    for (let i = 0; i < n; i++) json += (props.getProperty(prefijo + i) || '');
     try { lista = JSON.parse(json); } catch (e) { lista = []; }
   }
   if (cache) {
     try {
       const s = JSON.stringify(lista);
-      if (s.length < CACHE_MAX) cache.put(CACHE_CONTACTOS, s, CACHE_TTL);
+      if (s.length < CACHE_MAX) cache.put(claveCache, s, CACHE_TTL);
     } catch (e) {}
   }
   return lista;
 }
 
-/** Guarda la lista de contactos del centro en el almacén (troceada + caché). */
-function guardarContactosCentroStore_(lista) {
+function guardarTrozos_(prefijo, propNum, claveCache, lista) {
   const props = PropertiesService.getScriptProperties();
   const json = JSON.stringify(lista || []);
   const TAM = 8000; // margen bajo el límite por propiedad
 
   // Borra los trozos anteriores.
-  const previos = parseInt(props.getProperty(PROP_CONTACTOS_NUM) || '0', 10);
-  for (let i = 0; i < previos; i++) props.deleteProperty(PROP_CONTACTOS_PREFIJO + i);
+  const previos = parseInt(props.getProperty(propNum) || '0', 10);
+  for (let i = 0; i < previos; i++) props.deleteProperty(prefijo + i);
 
   // Escribe los nuevos.
   let trozos = 0;
   for (let i = 0; i < json.length; i += TAM) {
-    props.setProperty(PROP_CONTACTOS_PREFIJO + trozos, json.substring(i, i + TAM));
+    props.setProperty(prefijo + trozos, json.substring(i, i + TAM));
     trozos++;
   }
-  props.setProperty(PROP_CONTACTOS_NUM, String(trozos));
+  props.setProperty(propNum, String(trozos));
 
   // Refresca la caché compartida (o la invalida si es demasiado grande).
   const cache = cacheScript_();
   if (cache) {
-    try { if (json.length < CACHE_MAX) cache.put(CACHE_CONTACTOS, json, CACHE_TTL); else cache.remove(CACHE_CONTACTOS); }
+    try { if (json.length < CACHE_MAX) cache.put(claveCache, json, CACHE_TTL); else cache.remove(claveCache); }
     catch (e) {}
   }
-  return (lista || []).length;
 }
 
 /* --------------------- Bajas del claustro (tombstones) --------------------- *

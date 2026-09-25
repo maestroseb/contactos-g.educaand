@@ -9,6 +9,10 @@ Dos vistas según quién entra:
 
 - **Administrador** (se detecta solo en el primer despliegue) → asistente de
   configuración y gestión del claustro.
+- **Tutor/a** (profesorado con una tutoría asignada) → además gestiona el
+  alumnado de su curso y el profesorado que lo imparte (pestaña «Alumnado»).
+- **Alumnado** (incluido en algún curso) → sincroniza solo a sus compañeros,
+  su tutor/a y el profesorado de su clase.
 - **Profesorado** → sincroniza los contactos del centro y/o los suyos en **su**
   cuenta de Google Contacts, con opción diaria.
 
@@ -46,6 +50,7 @@ sola y se avisa por correo.
 | `Estado.gs` | **Almacén interno**: admin, configuración y lista del claustro |
 | `WebApp.gs` | `doGet` (3 estados) + API que llama el cliente |
 | `DatosCentral.gs` | Contactos del centro (almacén) y propios (por usuario) + parseo de pegado |
+| `Alumnado.gs` | Cursos/tutorías: roles tutor y alumno, contactos de clase |
 | `Grupos.gs` | Pertenencia al claustro (grupo de Google y/o lista) |
 | `Contactos.gs` | Núcleo People API: crear/actualizar/fusionar/traer/eliminar |
 | `SincronizacionDiaria.gs` | Disparador diario por usuario |
@@ -57,6 +62,7 @@ sola y se avisa por correo.
 | `Iconos.html` | Iconos SVG (estilo Lucide) |
 | `App.html` | Shell, navegación por pestañas y utilidades del cliente |
 | `MisContactos.html` | Pestaña de profesorado (todos): sincronizar y contactos propios |
+| `Alumnado.html` | Pestaña de cursos y alumnado (admin: todos, con filtro; tutor: el suyo) |
 | `Configuracion.html` | Pestaña de configuración del centro (solo admin) |
 | `ContactosCentro.html` | Pestaña del claustro / importación (solo admin) |
 
@@ -67,6 +73,9 @@ y oscuro, con iconos SVG (sin emojis):
 
 - **Mis contactos** (todos): sincronizar el centro por grupos, contactos
   propios, sincronización diaria y gestión de los contactos de Google.
+- **Alumnado** (admin y tutores): cursos con su tutor/a, alumnado (editable,
+  importable desde Séneca) y profesorado del curso. El admin filtra por curso.
+- La **sincronización diaria**, al activarse, hace también una subida inmediata.
 - **Configuración** (solo admin): centro (con verificación de código),
   especialidades, etiquetas y definición del claustro (grupo y/o lista).
 - **Contactos del centro** (solo admin): claustro editable e importación
