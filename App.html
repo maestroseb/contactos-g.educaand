@@ -629,18 +629,44 @@ function construirShell(estado, preferida){
     (grupos.length
       ? '<div class="syncpop-list">'+grupos.map(function(g){ return '<label><input type="checkbox" class="gsel" value="'+esc(g)+'" checked> '+esc(g)+'</label>'; }).join('')+'</div>'
       : '<p class="muted" style="margin:4px 0">Aún no hay grupos en el centro.</p>')+
+    (estado.rol !== 'alumno' ? '<div id="popCursos"></div>' : '')+
     '<label class="syncpop-prop"><input type="checkbox" id="pProp" checked> Mis contactos propios</label>'+
     '<button class="btn primary sm" id="pSync" style="width:100%;justify-content:center;margin-top:8px">'+icon('sync')+'Sincronizar selección</button>';
 
   document.getElementById('hSyncMenu').onclick = function(e){ e.stopPropagation(); pop.hidden = !pop.hidden; };
   document.addEventListener('click', function(e){ if(!pop.hidden && !pop.contains(e.target) && e.target.id!=='hSyncMenu') pop.hidden=true; });
   pop.addEventListener('click', function(e){ e.stopPropagation(); });
+  /** Grupos de alumnos (cursos en los que da clase) que el docente sincroniza
+   *  además del claustro. La marca se guarda y la usa también la diaria. */
+  function cursosMarcados(){
+    return Array.prototype.map.call(pop.querySelectorAll('.csel:checked'), function(c){ return c.value; });
+  }
+  window.pintarCursosPop = function(lista){
+    var box = document.getElementById('popCursos'); if(!box) return;
+    lista = lista || [];
+    box.innerHTML = lista.length
+      ? '<div class="syncpop-tit" style="margin-top:8px">Grupos de alumnos</div>'+
+        '<div class="syncpop-list">'+lista.map(function(c){
+          return '<label><input type="checkbox" class="csel" value="'+esc(c.id)+'"'+(c.marcado?' checked':'')+'> '+esc(c.nombre)+'</label>';
+        }).join('')+'</div>'
+      : '';
+    Array.prototype.forEach.call(box.querySelectorAll('.csel'), function(ch){
+      ch.onchange = function(){ google.script.run.withFailureHandler(function(e){ modalAviso(mensajeError(e)); }).guardarCursosSync(cursosMarcados()); };
+    });
+  };
+  window.pintarCursosPop(estado.cursosSync);
+
   document.getElementById('pSync').onclick = function(){
     var sel = Array.prototype.map.call(pop.querySelectorAll('.gsel:checked'), function(c){ return c.value; });
     var propios = document.getElementById('pProp').checked;
     var todosMarcados = sel.length === grupos.length;
     pop.hidden = true;
-    ejecutarSync({ incluirCentro: sel.length>0, gruposCentro: todosMarcados?[]:sel, incluirPropios: propios });
+    var opciones = { incluirCentro: sel.length>0 || cursosMarcados().length>0, gruposCentro: todosMarcados?[]:sel, incluirPropios: propios };
+    if(!document.getElementById('popCursos')) return ejecutarSync(opciones);
+    google.script.run
+      .withSuccessHandler(function(){ ejecutarSync(opciones); })
+      .withFailureHandler(function(e){ modalAviso(mensajeError(e)); })
+      .guardarCursosSync(cursosMarcados());
   };
 
   function ejecutarSync(opciones){

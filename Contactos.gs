@@ -20,7 +20,8 @@ function sincronizar(opciones) {
 
   // Para sincronizar los contactos del centro hay que pertenecer al claustro
   // (grupo de Google o lista administrada) o al alumnado de algún curso. El
-  // alumnado solo recibe a su clase, su tutor/a y su profesorado.
+  // alumnado solo recibe a su clase, su tutor/a y su profesorado; el profesorado
+  // recibe siempre el claustro y, además, los grupos de alumnos que haya elegido.
   const email = correoUsuarioActual_();
   if (opciones.incluirCentro && !puedeSincronizarCentro_(email)) {
     throw new Error('NO_MIEMBRO');
@@ -42,6 +43,7 @@ function sincronizar(opciones) {
       activos = activos.filter(c => c.grupos.some(g => sel.indexOf(g) !== -1));
     }
     filas = filas.concat(activos);
+    if (!esAlumnoSolo) filas = filas.concat(contactosDeCursosDocente_(email));
   }
   if (opciones.incluirPropios) {
     filas = filas.concat(leerContactosPropios_());
@@ -49,8 +51,8 @@ function sincronizar(opciones) {
 
   const resumen = procesarContactos_(filas);
   // Al sincronizar el centro, retira de Google las etiquetas de quien se haya
-  // quitado del claustro (bajas) o esté en pausa. No se borra el contacto.
-  if (opciones.incluirCentro && !esAlumnoSolo) {
+  // quitado del claustro o de un curso (bajas) o esté en pausa. No se borra el contacto.
+  if (opciones.incluirCentro) {
     try { retirarEtiquetasDeBajas_(filas, pausados, resumen); } catch (e) { Logger.log('retirarEtiquetasDeBajas_: ' + e.message); }
   }
   return resumen;
@@ -58,26 +60,32 @@ function sincronizar(opciones) {
 
 /**
  * Retira de los contactos de Google del usuario las etiquetas de las personas
- * dadas de baja en el claustro (registro de bajas) y de las que están «en pausa».
- * NO borra el contacto ni sus demás datos: solo quita las pertenencias a esas
- * etiquetas y garantiza que sigue en «Mis contactos». No toca a nadie que siga
- * activo en la lista actual.
+ * dadas de baja en el claustro o en un curso (registros de bajas) y de las que
+ * están «en pausa». NO borra el contacto ni sus demás datos: solo quita las
+ * pertenencias a esas etiquetas y garantiza que sigue en «Mis contactos». Nunca
+ * quita una etiqueta que la persona sigue teniendo en la lista actual.
  */
 function retirarEtiquetasDeBajas_(filasActuales, pausados, resumen) {
-  const bajas = leerBajas_().concat(pausados || []);
+  const bajas = leerBajas_().concat(leerBajasAlumnado_(), pausados || []);
   if (!bajas.length) return;
 
-  // Correos que se están sincronizando ahora (activos): no se tocan.
+  // email -> { etiqueta: true } que se están sincronizando ahora: no se tocan.
   const activos = {};
-  (filasActuales || []).forEach(f => { const e = String(f.email || '').trim().toLowerCase(); if (e) activos[e] = true; });
+  (filasActuales || []).forEach(f => {
+    const e = String(f.email || '').trim().toLowerCase(); if (!e) return;
+    const set = activos[e] || (activos[e] = {});
+    (f.grupos || []).forEach(g => { const gl = String(g || '').trim().toLowerCase(); if (gl) set[gl] = true; });
+  });
 
   // email -> { etiquetaEnMinusculas: true } a retirar.
   const porEmail = {};
   bajas.forEach(b => {
     const e = String(b.email || '').trim().toLowerCase();
-    if (!e || activos[e]) return;
-    const set = porEmail[e] || (porEmail[e] = {});
-    (b.grupos || []).forEach(g => { const gl = String(g || '').trim().toLowerCase(); if (gl) set[gl] = true; });
+    if (!e) return;
+    (b.grupos || []).forEach(g => {
+      const gl = String(g || '').trim().toLowerCase();
+      if (gl && !(activos[e] && activos[e][gl])) (porEmail[e] || (porEmail[e] = {}))[gl] = true;
+    });
   });
   if (!Object.keys(porEmail).length) return;
 
@@ -88,10 +96,12 @@ function retirarEtiquetasDeBajas_(filasActuales, pausados, resumen) {
   const aActualizar = [];
   obtenerTodosLosContactos_().forEach(c => {
     const emails = (c.emailAddresses || []).map(e => String(e.value || '').trim().toLowerCase());
-    if (emails.some(e => activos[e])) return;                 // sigue activo por algún correo
+    // Etiquetas a quitar (de cualquiera de sus correos) salvo las que sigue teniendo.
     let quitar = null;
-    for (let i = 0; i < emails.length; i++) { if (porEmail[emails[i]]) { quitar = porEmail[emails[i]]; break; } }
+    emails.forEach(e => { Object.keys(porEmail[e] || {}).forEach(g => { (quitar = quitar || {})[g] = true; }); });
     if (!quitar) return;
+    emails.forEach(e => { Object.keys(activos[e] || {}).forEach(g => { delete quitar[g]; }); });
+    if (!Object.keys(quitar).length) return;
 
     const membs = c.memberships || [];
     const nuevas = membs.filter(m => {

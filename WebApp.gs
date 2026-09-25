@@ -78,6 +78,7 @@ function getEstadoInicial() {
     esAdmin: rol === 'admin',
     rol: rol,
     esTutor: !alumno && esTutor_(email),
+    cursosSync: alumno ? [] : cursosElegibles_(email),
     configurado: !!cfg.completo,
     nombreApp: PARAMS.nombreApp,
     icono: PARAMS.icono,

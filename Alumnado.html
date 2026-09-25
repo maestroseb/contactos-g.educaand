@@ -1,13 +1,14 @@
 <script>
-/** Pestaña ALUMNADO (súper admin y tutores).
- *  - Súper admin: ve todos los cursos, los filtra, crea/borra y asigna tutor/a.
- *  - Tutor/a: gestiona solo su curso: alumnado y profesorado que lo imparte.
- *  El alumnado sincroniza a sus compañeros, su tutor/a y ese profesorado. */
+/** Pestaña ALUMNADO (súper admin y profesorado).
+ *  - Súper admin: ve y audita todos los cursos, los filtra, crea/borra y asigna tutor/a.
+ *  - Docente: crea sus cursos (queda como tutor/a) y gestiona solo los suyos.
+ *  El nombre del curso es la etiqueta del grupo. El alumnado sincroniza a sus
+ *  compañeros, su tutor/a y el profesorado marcado. */
 window.TABS = window.TABS || {};
 window.TABS.alumnado = {
   orden: 4, label: 'Alumnado', icono: 'curso',
   titulo: 'Alumnado', sub: 'Cursos, tutorías y profesorado de cada clase',
-  visible: function(estado){ return estado.esAdmin || estado.esTutor; },
+  visible: function(estado){ return estado.esAdmin || estado.rol === 'profesor'; },
   render: function (cont, estado) {
     var DATA = null, filtro = '', nuevos = 0;
 
@@ -31,6 +32,11 @@ window.TABS.alumnado = {
         .getAlumnado();
     }
 
+    /** Actualiza la lista de grupos del menú «Sincronizar» tras crear/borrar/renombrar. */
+    function refrescarPop(){
+      if(window.pintarCursosPop) google.script.run.withSuccessHandler(window.pintarCursosPop).getCursosSync();
+    }
+
     function nombreDe(email){
       var c = (DATA.claustro||[]).filter(function(x){ return x.email===email; })[0];
       if(!c) return email || '';
@@ -40,8 +46,8 @@ window.TABS.alumnado = {
 
     function pintarCabecera(){
       cont.querySelector('#aluDesc').innerHTML = DATA.esAdmin
-        ? 'Crea los cursos y asigna su <b>tutor/a</b>. Cada tutor/a gestiona el alumnado de su clase y elige el profesorado que la imparte. El alumnado, al entrar en la web, sincroniza solo a sus compañeros, a su tutor/a y a ese profesorado.'
-        : 'Añade el alumnado de tu tutoría y marca el profesorado que imparte clase en ella. Tu alumnado, al entrar en la web, sincronizará solo a sus compañeros, a ti y a ese profesorado.';
+        ? 'Ves todos los cursos del centro. Puedes crearlos, revisar sus nombres y asignar o cambiar su <b>tutor/a</b>. Cada docente también puede crear los suyos. El nombre del curso es la <b>etiqueta</b> de ese grupo. El alumnado, al entrar en la web, sincroniza solo a sus compañeros, a su tutor/a y al profesorado marcado (etiqueta «Profesorado &lt;curso&gt;»).'
+        : 'Crea tus cursos (quedas como tutor/a), añade su alumnado y marca el profesorado que da clase en ellos. El nombre del curso es la <b>etiqueta</b> de ese grupo. Tu alumnado, al entrar en la web, sincronizará solo a sus compañeros, a ti y a ese profesorado. Para recibir tú los contactos de un grupo, márcalo en el menú de «Sincronizar».';
       var acc = cont.querySelector('#aluAcc');
       var cursos = DATA.cursos || [];
       var html = '';
@@ -51,7 +57,7 @@ window.TABS.alumnado = {
           cursos.map(function(c){ return '<option value="'+esc(c.id)+'"'+(filtro===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
         '</select>';
       }
-      if(DATA.esAdmin) html += '<button class="btn sm primary" id="aluNuevo">'+icon('add')+'Nuevo curso</button>';
+      html += '<button class="btn sm primary" id="aluNuevo">'+icon('add')+'Nuevo curso</button>';
       acc.innerHTML = html;
       var sel = acc.querySelector('#aluFiltro');
       if(sel) sel.onchange = function(){ filtro = sel.value; pintar(); };
@@ -70,7 +76,7 @@ window.TABS.alumnado = {
       var cursos = (DATA.cursos||[]).filter(function(c){ return !filtro || c.id===filtro; });
       zona.innerHTML = '';
       if(!cursos.length){
-        zona.innerHTML = '<div class="card"><p class="muted">'+(DATA.esAdmin?'Aún no hay cursos. Pulsa «Nuevo curso» para crear el primero.':'No tienes ninguna tutoría asignada.')+'</p></div>';
+        zona.innerHTML = '<div class="card"><p class="muted">'+(DATA.esAdmin?'Aún no hay cursos.':'Aún no tienes cursos.')+' Pulsa «Nuevo curso» para crear el primero.</p></div>';
         return;
       }
       cursos.forEach(function(c){ zona.appendChild(tarjeta(c, c.id)); });
@@ -79,6 +85,7 @@ window.TABS.alumnado = {
     /** Tarjeta editable de un curso. */
     function tarjeta(curso, key){
       var m = JSON.parse(JSON.stringify(curso));
+      if(!m.id && !DATA.esAdmin) m.tutor = DATA.yo;   // el docente que lo crea queda como tutor/a
       var card = document.createElement('div');
       card.className = 'card';
       var admin = DATA.esAdmin;
@@ -93,15 +100,18 @@ window.TABS.alumnado = {
           '<div class="row">'+
             '<button class="btn sm cImp">'+icon('importar')+'Importar alumnado…</button>'+
             '<button class="btn sm cCSV">'+icon('descargar')+'Descargar CSV</button>'+
-            (admin?'<button class="btn danger sm icononly cDel" title="Eliminar curso">'+icon('borrar')+'</button>':'')+
+            '<button class="btn danger sm icononly cDel" title="Eliminar curso">'+icon('borrar')+'</button>'+
           '</div>'+
         '</div>'+
         (admin
           ? '<div class="row" style="gap:14px;align-items:flex-end;margin-bottom:6px">'+
-              '<label class="fld" style="flex:1;min-width:160px"><span>Curso</span><input class="cNombre" placeholder="p. ej. 3º ESO A" value="'+esc(m.nombre)+'"></label>'+
+              '<label class="fld" style="flex:1;min-width:160px"><span>Curso (etiqueta del grupo)</span><input class="cNombre" placeholder="p. ej. 3º ESO A" value="'+esc(m.nombre)+'"></label>'+
               '<label class="fld" style="flex:2;min-width:220px"><span>Tutor/a</span><select class="cTutor">'+opcionesTutor+'</select></label>'+
             '</div>'
-          : '<p class="desc"><b>Tutor/a:</b> '+esc(nombreDe(m.tutor))+'</p>')+
+          : '<div class="row" style="gap:14px;align-items:flex-end;margin-bottom:6px">'+
+              '<label class="fld" style="flex:1;min-width:160px"><span>Curso (etiqueta del grupo)</span><input class="cNombre" placeholder="p. ej. 3º ESO A" value="'+esc(m.nombre)+'"></label>'+
+              '<p class="desc" style="flex:2;min-width:220px"><b>Tutor/a:</b> '+esc(nombreDe(m.tutor))+'</p>'+
+            '</div>')+
         '<h3 style="margin:6px 0 8px;font-size:14px">Profesorado del curso <span class="muted cNProf"></span></h3>'+
         '<p class="desc">Marca el profesorado que da clase en este curso (el tutor/a se incluye siempre).</p>'+
         '<div class="cProfBusca"></div>'+
@@ -219,7 +229,7 @@ window.TABS.alumnado = {
             correr(bDel, cst, 'Eliminando…', function(r){ r.eliminarCurso(m.id); }, function(){
               DATA.cursos = DATA.cursos.filter(function(c){ return c.id!==m.id; });
               if(filtro===m.id) filtro = '';
-              pintarCabecera(); card.remove();
+              pintarCabecera(); card.remove(); refrescarPop();
               if(!cont.querySelector('#aluCursos .card')) pintar();
             });
           }});
@@ -235,6 +245,7 @@ window.TABS.alumnado = {
           var i = -1; DATA.cursos.forEach(function(c, k){ if(c.id===res.id) i = k; });
           if(i === -1) DATA.cursos.push(res); else DATA.cursos[i] = res;
           DATA.cursos.sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre), 'es', { numeric:true }); });
+          refrescarPop();
           if(nuevo) pintarCabecera();
           else { var o = cont.querySelector('#aluFiltro option[value="'+res.id+'"]'); if(o) o.textContent = res.nombre; }
           setStatus(cst, 'Curso guardado: '+res.alumnos.length+' alumnos/as'+(sinCorreo?' ('+sinCorreo+' sin correo: no podrán sincronizar)':'')+'.', sinCorreo?'err':'ok');

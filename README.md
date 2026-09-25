@@ -9,8 +9,10 @@ Dos vistas según quién entra:
 
 - **Administrador** (se detecta solo en el primer despliegue) → asistente de
   configuración y gestión del claustro.
-- **Tutor/a** (profesorado con una tutoría asignada) → además gestiona el
-  alumnado de su curso y el profesorado que lo imparte (pestaña «Alumnado»).
+- **Docente / tutor/a** → crea sus propios cursos (queda como tutor/a) y
+  gestiona su alumnado y el profesorado que los imparte (pestaña «Alumnado»).
+  Sincroniza siempre el claustro y, si quiere, los grupos de alumnos en los que
+  da clase (menú de «Sincronizar»).
 - **Alumnado** (incluido en algún curso) → sincroniza solo a sus compañeros,
   su tutor/a y el profesorado de su clase.
 - **Profesorado** → sincroniza los contactos del centro y/o los suyos en **su**
@@ -73,8 +75,11 @@ y oscuro, con iconos SVG (sin emojis):
 
 - **Mis contactos** (todos): sincronizar el centro por grupos, contactos
   propios, sincronización diaria y gestión de los contactos de Google.
-- **Alumnado** (admin y tutores): cursos con su tutor/a, alumnado (editable,
-  importable desde Séneca) y profesorado del curso. El admin filtra por curso.
+- **Alumnado** (admin y profesorado): cursos con su tutor/a, alumnado (editable,
+  importable desde Séneca) y profesorado del curso. El nombre del curso es la
+  etiqueta del grupo. El admin ve todos, filtra por curso y asigna tutores.
+  Las bajas de alumnos (o cursos renombrados/borrados) retiran la etiqueta en
+  la siguiente sincronización de sus compañeros y profesorado.
 - La **sincronización diaria**, al activarse, hace también una subida inmediata.
 - **Configuración** (solo admin): centro (con verificación de código),
   especialidades, etiquetas y definición del claustro (grupo y/o lista).
