@@ -21,8 +21,26 @@ window.TABS.alumnado = {
         '<p class="desc" id="aluDesc"></p>'+
         '<p class="status" id="aluSt"></p>'+
       '</div>'+
-      '<div id="aluCursos"><p class="muted">Cargando…</p></div>';
+      '<div id="aluCursos"><p class="muted">Cargando…</p></div>'+
+      '<button class="btn primary floatsave" id="aluSave" hidden>'+icon('guardar')+'Guardar cambios</button>';
     var st = cont.querySelector('#aluSt');
+
+    /* ---- Guardado unificado (botón flotante, como en las otras pestañas) ---- */
+    function tarjetasSucias(){
+      return Array.prototype.filter.call(cont.querySelectorAll('#aluCursos .card'), function(c){ return c._sucio && c._sucio(); });
+    }
+    function revisarGuardar(){ var b = cont.querySelector('#aluSave'); if(b) b.hidden = !tarjetasSucias().length; }
+    cont._sucio = function(){ return tarjetasSucias().length > 0; };   // no perder cambios al refrescar la pestaña
+    cont.querySelector('#aluSave').onclick = function(){
+      var btn = this, cola = tarjetasSucias();
+      if(!cola.length) return;
+      btn.disabled = true;
+      (function siguiente(){
+        var c = cola.shift();
+        if(!c){ btn.disabled = false; revisarGuardar(); return; }
+        c._guardar(function(){ siguiente(); });
+      })();
+    };
 
     function cargar(){
       setStatus(st, 'Cargando cursos…', 'busy');
@@ -139,7 +157,6 @@ window.TABS.alumnado = {
           '<thead><tr><th class="num-col">Nº</th><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th title="Otro nombre con el que buscarlo (p. ej. su nombre en español). Se guarda como apodo del contacto.">Alias</th><th></th></tr></thead><tbody></tbody></table></div>'+
         '<div class="row" style="margin-top:14px">'+
           '<button class="btn sm cAdd">'+icon('add')+'Añadir alumno/a</button>'+
-          '<button class="btn primary sm cSave" style="margin-left:auto">'+icon('guardar')+'Guardar curso</button>'+
         '</div>'+
         '<p class="status cSt"></p>';
 
@@ -206,6 +223,7 @@ window.TABS.alumnado = {
         }).filter(function(o){ return o.email || o.nombre || o.apellidos; });
       }
       function contar(){
+        revisarGuardar();
         var tutor = tutorActual();
         card.querySelector('.cNProf').textContent = '('+(m.profesores.filter(function(e){ return e!==tutor; }).length + (tutor?1:0))+')';
         card.querySelector('.cNAlu').textContent = '('+leerAlumnos().length+')';
@@ -226,7 +244,7 @@ window.TABS.alumnado = {
       var selT = card.querySelector('.cTutor');
       if(selT) selT.onchange = pintarProfes;
       var inpN = card.querySelector('.cNombre');
-      if(inpN) inpN.oninput = function(){ card.querySelector('.cTit').textContent = inpN.value || 'Nuevo curso'; };
+      if(inpN) inpN.oninput = function(){ card.querySelector('.cTit').textContent = inpN.value || 'Nuevo curso'; revisarGuardar(); };
       pintarProfes();
 
       card.querySelector('.cAdd').onclick = function(){ fila({}); aplicarZebra(tb); };
@@ -298,7 +316,7 @@ window.TABS.alumnado = {
 
       var bDel = card.querySelector('.cDel');
       if(bDel) bDel.onclick = function(){
-        if(!m.id){ card.remove(); aplicarFiltro(); return; }
+        if(!m.id){ card.remove(); aplicarFiltro(); revisarGuardar(); return; }
         modalConfirmar({ titulo:'Eliminar curso', icono:'borrar', peligro:true, aceptar:'Eliminar',
           mensaje:'¿Eliminar el curso «'+m.nombre+'» con su alumnado?\n\nSu alumnado dejará de poder entrar en la web.',
           onAceptar:function(){
@@ -311,11 +329,24 @@ window.TABS.alumnado = {
           }});
       };
 
-      card.querySelector('.cSave').onclick = function(){
+      /** Foto del estado editable (el orden de filas no cuenta como cambio). */
+      function foto(){
+        var tutor = tutorActual();
+        return JSON.stringify({
+          n: inpN ? inpN.value.trim() : m.nombre, t: tutor,
+          p: m.profesores.filter(function(e){ return e !== tutor; }).slice().sort(),
+          a: leerAlumnos().map(function(a){ return [a.email, a.nombre, a.apellidos, a.alias||''].join('|'); }).sort()
+        });
+      }
+      card._sucio = function(){ return foto() !== card._inicial; };
+
+      card._guardar = function(fin){
         var datos = { id:m.id, nombre: inpN ? inpN.value.trim() : m.nombre, tutor: tutorActual(),
           profesores: m.profesores.slice(), alumnos: leerAlumnos() };
         var sinCorreo = datos.alumnos.filter(function(a){ return !a.email; }).length;
-        correr(this, cst, 'Guardando…', function(r){ r.guardarCurso(datos); }, function(out){
+        setStatus(cst, 'Guardando…', 'busy');
+        google.script.run.withFailureHandler(function(e){ setStatus(cst, mensajeError(e), 'err'); if(fin) fin(false); })
+          .withSuccessHandler(function(out){
           var res = out.curso;
           var nuevo = !m.id;
           m = res;
@@ -326,11 +357,14 @@ window.TABS.alumnado = {
           refrescarPop(out.cursosSync);
           if(nuevo) pintarCabecera();
           else { var o = cont.querySelector('#aluFiltro option[value="'+res.id+'"]'); if(o) o.textContent = res.nombre; }
-          ordenarFilas(); aplicarZebra(tb); contar();
+          ordenarFilas(); aplicarZebra(tb);
+          card._inicial = foto(); contar();
           setStatus(cst, 'Curso guardado: '+res.alumnos.length+' alumnos/as'+(sinCorreo?' ('+sinCorreo+' sin correo: no podrán sincronizar)':'')+'.', sinCorreo?'err':'ok');
-        });
+          if(fin) fin(true);
+        }).guardarCurso(datos);
       };
 
+      card._inicial = foto();   // un curso nuevo cuenta como cambio en cuanto se escribe algo
       return card;
     }
 
