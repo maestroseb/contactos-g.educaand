@@ -16,6 +16,31 @@ window.TABS.configuracion = {
 function catEtq(e, k){ if(!e) return []; if(Array.isArray(e)) return (k==='grupo'?e:[]); return e[k]||[]; }
 function lineasCfg(txt){ return String(txt||'').split('\n').map(function(s){return s.trim();}).filter(Boolean); }
 
+var MESES_ = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+/** Tarjeta «Curso escolar»: fecha de corte y apertura del nuevo curso. */
+function cursoEscolarHtml(ce){
+  if(!ce) return '';
+  var c = ce.corte || { mes:8, dia:1 };
+  var dias = ''; for(var d=1; d<=31; d++) dias += '<option'+(d===c.dia?' selected':'')+'>'+d+'</option>';
+  var meses = MESES_.map(function(m, i){ return '<option value="'+(i+1)+'"'+((i+1)===c.mes?' selected':'')+'>'+m+'</option>'; }).join('');
+  return '<div class="card" id="cursoCard">'+
+    '<h2>'+icon('curso')+'Curso escolar '+esc(ce.actual)+
+      ' <span class="badge'+(ce.abierto?' admin':'')+'" style="margin-left:6px">'+(ce.abierto?'Abierto':'Pendiente de abrir')+'</span></h2>'+
+    '<p class="desc">Cada año, en la <b>fecha de corte</b>, la sincronización de todo el mundo se cierra sola: se retiran las etiquetas del centro de sus contactos (se conservan en «Mis contactos»), el profesorado pierde los contactos de alumnado, se eliminan los cursos de alumnado y se desactiva la sincronización diaria. '+
+      'Después, un administrador revisa el claustro y <b>abre el nuevo curso</b>; entonces cada persona vuelve a activar su sincronización si quiere.</p>'+
+    (ce.abierto ? '' :
+      '<div class="callout warn" style="margin-bottom:12px">'+icon('alerta')+'<span>Antes de abrir, actualiza la lista en <b>Contactos del centro</b> (importa de Séneca: quien ya no esté quedará como baja) y revisa los administradores.</span></div>'+
+      '<button class="btn primary" id="bAbrirCurso">'+icon('play')+'Abrir curso '+esc(ce.actual)+'</button>')+
+    '<div class="row" style="gap:10px;align-items:flex-end;margin-top:14px">'+
+      '<label class="fld" style="margin:0"><span>Fecha de corte · día</span><select id="corteDia" style="width:auto">'+dias+'</select></label>'+
+      '<label class="fld" style="margin:0"><span>mes</span><select id="corteMes" style="width:auto">'+meses+'</select></label>'+
+      '<button class="btn" id="bCorte">'+icon('guardar')+'Guardar fecha</button>'+
+    '</div>'+
+    '<p class="status" id="sCurso"></p>'+
+  '</div>';
+}
+
 function pintarConfig(cont, estado, s){
   var c = s.config || {}, d = s.defaults || {};
   var esp = (c.especialidades || d.especialidades || []).join('\n');
@@ -60,6 +85,8 @@ function pintarConfig(cont, estado, s){
       '</div>',
 
     '</div>',
+
+    cursoEscolarHtml(s.cursoEscolar),
 
     '<div class="card">',
       '<h2>'+icon('config')+'Especialidades y etiquetas</h2>',
@@ -166,6 +193,27 @@ function pintarConfig(cont, estado, s){
       function(r){ r.guardarAdmins(adminsLocal); },
       function(res, st){ adminsLocal=(res.extra||[]).slice(); pintarAdmins();
         setStatus(st, 'Administradores guardados: '+(adminsLocal.length+1)+' en total.', 'ok'); });
+  };
+
+  // Curso escolar: abrir el nuevo curso y fecha de corte.
+  var bAbrir = cont.querySelector('#bAbrirCurso');
+  if(bAbrir) bAbrir.onclick = function(){
+    modalConfirmar({ titulo:'Abrir curso '+s.cursoEscolar.actual, icono:'play', aceptar:'Abrir curso',
+      mensaje:'¿Has revisado ya el claustro (altas y bajas) y los administradores?\n\nAl abrir, cada persona del claustro podrá volver a activar su sincronización.',
+      onAceptar:function(){
+        correr(bAbrir, cont.querySelector('#sCurso'), 'Abriendo…', function(r){ r.abrirCurso(); },
+          function(){ recargarApp('configuracion'); });
+      }});
+  };
+  var bCorte = cont.querySelector('#bCorte');
+  if(bCorte) bCorte.onclick = function(){
+    var dia = cont.querySelector('#corteDia').value, mes = cont.querySelector('#corteMes').value;
+    modalConfirmar({ titulo:'Cambiar la fecha de corte', icono:'alerta', aceptar:'Guardar',
+      mensaje:'La nueva fecha de corte será el '+dia+' de '+MESES_[mes-1]+'.\n\nSi esa fecha ya ha pasado este año y el curso cambia, se cerrará el curso en ese momento. ¿Continuar?',
+      onAceptar:function(){
+        correr(bCorte, cont.querySelector('#sCurso'), 'Guardando…', function(r){ r.guardarCorte(mes, dia); },
+          function(){ recargarApp('configuracion'); });
+      }});
   };
 
   var floatBtn = cont.querySelector('#cfgSave');

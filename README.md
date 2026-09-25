@@ -54,6 +54,7 @@ sola y se avisa por correo.
 | `DatosCentral.gs` | Contactos del centro (almacén) y propios (por usuario) + parseo de pegado |
 | `Alumnado.gs` | Cursos/tutorías: roles tutor y alumno, contactos de clase |
 | `Classroom.gs` | Importar alumnado desde Google Classroom (clases del docente) |
+| `CursoEscolar.gs` | Fin de curso automático (fecha de corte) y apertura del nuevo curso |
 | `Grupos.gs` | Pertenencia al claustro (grupo de Google y/o lista) |
 | `Contactos.gs` | Núcleo People API: crear/actualizar/fusionar/traer/eliminar |
 | `SincronizacionDiaria.gs` | Disparador diario por usuario |
@@ -107,6 +108,19 @@ respaldo para que la detección del admin sea fiable en la web app.
 - Validación en el servidor: correos del alumnado `@g.educaand.es`, profesorado
   del claustro, nombres de curso que no choquen con etiquetas del claustro,
   límites de tamaño y comprobación de espacio antes de guardar.
+
+**Fin de curso automático:**
+
+- En la **fecha de corte** (1 de agosto por defecto, configurable) se cierra el
+  curso sin depender de nadie: cada usuario, con su disparador diario (o al
+  entrar en la web), pierde las etiquetas del centro (sus contactos quedan en
+  «Mis contactos»), el profesorado pierde los contactos de alumnado, se
+  eliminan los cursos de alumnado y se desactiva la sincronización diaria.
+- El centro queda **pendiente de abrir**: nadie (salvo admins) puede reactivar
+  hasta que un admin revise el claustro y pulse «Abrir curso» en Configuración.
+  Después, quien quiera vuelve a activar su sincronización diaria.
+- Rescate: si no queda ningún admin, el propietario del proyecto añade la
+  propiedad del script `RESCATE_ADMIN` con el correo del nuevo admin.
 
 **Pendiente / mejoras:**
 

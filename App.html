@@ -122,6 +122,7 @@ function mensajeError(e){
   if(m.indexOf('NO_MIEMBRO')!==-1) return 'No puedes sincronizar los contactos del centro porque no perteneces al claustro ni al alumnado.';
   if(m.indexOf('NO_AUTORIZADO')!==-1) return 'No tienes permisos de administrador.';
   if(m.indexOf('NO_PRINCIPAL')!==-1) return 'Solo el administrador principal puede hacer esto.';
+  if(m.indexOf('CURSO_CERRADO')!==-1) return 'El centro está preparando el nuevo curso. Podrás activar la sincronización cuando un administrador lo abra.';
   if(m.indexOf('EN_CURSO')!==-1) return 'Ya hay una sincronización en marcha. Espera a que termine.';
   if(m.indexOf('ALMACEN_LLENO')!==-1) return 'El almacén de la aplicación está casi lleno. Avisa al administrador.';
   if(m.indexOf('ALMACEN_OCUPADO')!==-1) return 'Otra persona está guardando en este momento. Inténtalo de nuevo en unos segundos.';
@@ -577,6 +578,15 @@ function tabVisible(t, estado){
   return true;
 }
 
+/** Aviso de curso escolar cerrado (tras la fecha de corte, hasta que un admin lo abra). */
+function avisoCursoHtml(estado){
+  if(!estado.cursoCerrado) return '';
+  return '<div class="callout warn" style="margin-bottom:16px">'+icon('alerta')+'<span>'+(estado.esAdmin
+    ? '<b>Curso '+esc(estado.cursoEscolar)+' pendiente de abrir.</b> Actualiza el claustro (altas y bajas) y ábrelo en <b>Configuración → Curso escolar</b>. Hasta entonces nadie más puede activar la sincronización.'
+    : '<b>El centro está preparando el curso '+esc(estado.cursoEscolar)+'.</b> Cuando esté abierto podrás volver a activar la sincronización diaria.')+
+    '</span></div>';
+}
+
 /** Texto del rol para la cabecera. */
 function rolTexto(estado){
   if(estado.esAdmin) return 'Administrador';
@@ -634,6 +644,7 @@ function construirShell(estado, preferida){
         '<div class="syncarea" id="syncArea" hidden><span class="status" id="syncStatus"></span></div>'+
       '</div>'+
       '<div class="page">'+
+        avisoCursoHtml(estado)+
         '<div class="pagehead"><h1 id="tb-tit"></h1><div class="sub" id="tb-sub"></div></div>'+
         '<div class="content" id="content"></div>'+
       '</div>'+
@@ -729,6 +740,18 @@ function construirShell(estado, preferida){
   var primera = (preferida && window.TABS[preferida] && tabVisible(window.TABS[preferida], estado))
     ? preferida : (necesitaConfig ? 'configuracion' : tabs[0].key);
   irATab(primera);
+
+  // Vinculación del curso anterior caducada: se limpia al entrar (etiquetas del
+  // centro fuera, diaria desactivada) y se recarga el estado.
+  if(estado.caducado){
+    var area = document.getElementById('syncArea'), st = document.getElementById('syncStatus');
+    area.hidden = false; setStatus(st, 'Cerrando tu sincronización del curso anterior…', 'busy');
+    bloquearSync(true);
+    google.script.run
+      .withSuccessHandler(function(){ bloquearSync(false); recargarApp(); })
+      .withFailureHandler(function(e){ bloquearSync(false); setStatus(st, mensajeError(e), 'err'); })
+      .desvincularCursoAnterior();
+  }
 }
 
 function irATab(key){
