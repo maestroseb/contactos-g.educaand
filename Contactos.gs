@@ -29,11 +29,14 @@ function sincronizar(opciones) {
   const email = correoUsuarioActual_();
   const rol = opciones.incluirCentro ? rolDe_(email) : '';
   if (opciones.incluirCentro && !rol) throw new Error('NO_MIEMBRO');
+  if (opciones.incluirCentro && !cursoAbiertoPara_(email)) throw new Error('CURSO_CERRADO');
   const esAlumnoSolo = rol === 'alumno';
 
   const lock = LockService.getUserLock();
   if (!lock.tryLock(1000)) throw new Error('EN_CURSO');
   try {
+    // Si quedó pendiente desvincularse del curso anterior, se hace antes.
+    if (opciones.incluirCentro && vinculacionCaducada_()) desvincularCurso_();
     // Selección de grupos de alumnos enviada desde el menú (se recuerda para la diaria).
     if (Array.isArray(opciones.cursos) && !esAlumnoSolo && rol) guardarCursosSync(opciones.cursos);
     let filas = [];
@@ -77,6 +80,7 @@ function sincronizar(opciones) {
       catch (e) { Logger.log('retirarEtiquetasDeBajas_: ' + e.message); }
     }
     try { eliminarGruposVacios_(vaciadas); } catch (e) { Logger.log('eliminarGruposVacios_: ' + e.message); }
+    if (opciones.incluirCentro) marcarCursoVinculado_();
     return resumen;
   } finally {
     limpiarProgreso_();

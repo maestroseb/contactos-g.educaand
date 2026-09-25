@@ -330,6 +330,7 @@ function guardarCurso(curso) {
   const email = correoUsuarioActual_();
   const admin = esAdmin_(email);
   if (!admin && !esMiembroClaustro_(email)) throw new Error('NO_AUTORIZADO');
+  if (!cursoAbiertoPara_(email)) throw new Error('CURSO_CERRADO');
   curso = curso || {};
   const t = v => String(v || '').trim().slice(0, LIM_.texto);
 

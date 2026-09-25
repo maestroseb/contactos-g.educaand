@@ -23,6 +23,8 @@ const PARAMS = {
  * Se guardan en el almacén al completar la configuración.
  */
 const DEFAULTS = {
+  /** Fecha de corte del curso escolar (día y mes). Configurable por el admin. */
+  corte: { mes: 8, dia: 1 },
   especialidades: [
     'Infantil', 'Primaria', 'Inglés', 'Francés', 'Educación Física', 'Música',
     'Pedagogía Terapéutica', 'Audición y Lenguaje', 'Religión', 'Matemáticas',

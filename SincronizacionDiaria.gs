@@ -38,8 +38,11 @@ function activarSincronizacionDiaria(opciones) {
   if (opciones.incluirCentro && !puedeSincronizarCentro_(email)) {
     throw new Error('NO_MIEMBRO');
   }
+  if (opciones.incluirCentro && !cursoAbiertoPara_(email)) throw new Error('CURSO_CERRADO');
+  if (vinculacionCaducada_()) desvincularCurso_();   // limpia lo del curso anterior antes de empezar
 
   desactivarSincronizacionDiaria_();  // evita duplicar disparadores
+  if (opciones.incluirCentro) marcarCursoVinculado_();
 
   PropertiesService.getUserProperties()
     .setProperty(CLAVE_OPCIONES_DIARIA_, JSON.stringify(opciones || {}));
@@ -79,6 +82,18 @@ function ejecutarSincronizacionDiaria() {
     const opciones = raw ? JSON.parse(raw) : { incluirCentro: true, incluirPropios: true };
 
     const email = correoUsuarioActual_();
+
+    // Fin de curso: al pasar la fecha de corte, cada usuario se desvincula solo
+    // (etiquetas del centro fuera, contactos de alumnado fuera, diaria apagada).
+    estadoCurso_();   // aplica el corte del centro si toca (una vez por curso)
+    const vinculado = leerCursoVinculado_();
+    if (!vinculado) marcarCursoVinculado_();            // instalaciones previas
+    else if (vinculado !== cursoActual_()) {
+      desvincularCurso_();
+      try { notificarFinDeCurso_(vinculado); } catch (e) { Logger.log('notificarFinDeCurso_: ' + e.message); }
+      return;
+    }
+
     if (opciones.incluirCentro && !puedeSincronizarCentro_(email)) {
       // Solo se da de baja si la comprobación es fiable (la lista del claustro se
       // ha leído y no hubo un fallo transitorio consultando el grupo).

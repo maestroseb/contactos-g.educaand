@@ -12,6 +12,7 @@
 
 function doGet(e) {
   const email = correoUsuarioActual_();
+  aplicarRescateAdmin_();              // el propietario puede nombrar un admin (ver CursoEscolar.gs)
   fijarAdminSiVacio_(email);           // el primer usuario que entra queda como admin
   const esAdmin = esAdmin_(email);
 
@@ -73,7 +74,11 @@ function getEstadoInicial() {
   const alumno = rol === 'alumno';
   // Sin rol (ajeno al centro o centro sin configurar): solo lo imprescindible.
   if (!rol) return { email: email, rol: '', esAdmin: false, configurado: !!cfg.completo, nombreApp: PARAMS.nombreApp };
+  const curso = estadoCurso_();
   return {
+    cursoEscolar: curso.actual,
+    cursoCerrado: !curso.abierto,
+    caducado: vinculacionCaducada_(),
     email: email,
     nombreUsuario: perfil.nombre,
     fotoUsuario: perfil.foto,
@@ -117,6 +122,7 @@ function getEstadoConfig() {
     defaults: DEFAULTS,
     config: getConfig_() || {},
     numContactos: claustro.length,
+    cursoEscolar: estadoCurso_(),
     claustro: claustro
   };
 }
