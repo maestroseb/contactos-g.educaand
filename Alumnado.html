@@ -112,6 +112,7 @@ window.TABS.alumnado = {
         '<div class="card-head">'+
           '<h2>'+icon('curso')+'<span class="cTit">'+esc(m.nombre||'Nuevo curso')+'</span></h2>'+
           '<div class="row">'+
+            '<button class="btn sm cClass">'+icon('curso')+'Desde Classroom…</button>'+
             '<button class="btn sm cImp">'+icon('importar')+'Importar alumnado…</button>'+
             '<button class="btn sm cCSV">'+icon('descargar')+'Descargar CSV</button>'+
             '<button class="btn danger sm icononly cDel" title="Eliminar curso">'+icon('borrar')+'</button>'+
@@ -205,6 +206,29 @@ window.TABS.alumnado = {
 
       card.querySelector('.cAdd').onclick = function(){ fila({}); aplicarZebra(tb); };
 
+      /** Añade filas sin repetir correos ya presentes. Devuelve cuántas añadió. */
+      function anadirAlumnos(lista){
+        var ya = {}; leerAlumnos().forEach(function(a){ if(a.email) ya[a.email.toLowerCase()] = true; });
+        if(!leerAlumnos().length) tb.innerHTML = '';
+        var n = 0;
+        (lista||[]).forEach(function(c){
+          var e = String(c.email||'').toLowerCase();
+          if(e && ya[e]) return;
+          if(e) ya[e] = true;
+          fila({ nombre:c.nombre, apellidos:c.apellidos, email:e }); n++;
+        });
+        aplicarZebra(tb); contar();
+        return n;
+      }
+
+      card.querySelector('.cClass').onclick = function(){
+        modalClassroom(function(clase, lista){
+          var n = anadirAlumnos(lista);
+          if(inpN && !inpN.value.trim()){ inpN.value = clase.nombre; inpN.oninput(); }   // curso nuevo: toma el nombre de la clase
+          setStatus(cst, 'Añadidos '+n+' alumnos/as de «'+clase.nombre+'»'+(lista.length>n?' ('+(lista.length-n)+' ya estaban)':'')+'. Revisa y pulsa «Guardar curso».', 'ok');
+        });
+      };
+
       card.querySelector('.cImp').onclick = function(){
         modalPegar({
           titulo: 'Importar alumnado',
@@ -216,10 +240,8 @@ window.TABS.alumnado = {
             ctx.btn.disabled = true; setStatus(ctx.st, 'Procesando…', 'busy');
             google.script.run
               .withSuccessHandler(function(lista){
-                if(!leerAlumnos().length) tb.innerHTML = '';
-                (lista||[]).forEach(function(c){ fila({ nombre:c.nombre, apellidos:c.apellidos, email:c.email }); });
-                aplicarZebra(tb); contar(); ctx.cerrar();
-                setStatus(cst, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar curso».', 'ok');
+                var n = anadirAlumnos(lista); ctx.cerrar();
+                setStatus(cst, 'Añadidas '+n+' filas. Revisa y pulsa «Guardar curso».', 'ok');
               })
               .withFailureHandler(function(e){ ctx.btn.disabled=false; setStatus(ctx.st, mensajeError(e), 'err'); })
               .parsearPegado(texto);
@@ -274,4 +296,64 @@ window.TABS.alumnado = {
     cargar();
   }
 };
+
+/** Clases de Classroom del docente (se piden una vez por sesión). */
+var CLASSROOM_CURSOS = null;
+
+/**
+ * Modal con un desplegable de las clases de Google Classroom del docente.
+ * onElegir(clase {id,nombre}, alumnos [{nombre,apellidos,email}]).
+ */
+function modalClassroom(onElegir){
+  var ov = document.createElement('div');
+  ov.className = 'modal-ov';
+  ov.innerHTML =
+    '<div class="modal" role="dialog" aria-modal="true">'+
+      '<div class="modal-head"><h3>'+icon('curso')+'Traer alumnado de Classroom</h3>'+
+        '<button class="btn ghost sm icononly modal-x" title="Cerrar">'+icon('cerrar')+'</button></div>'+
+      '<p class="desc">Elige una de tus clases de Google Classroom. Su alumnado se añadirá a la tabla (sin repetir); luego pulsa «Guardar curso».</p>'+
+      '<label class="fld"><span>Clase</span><select class="mc-sel" disabled><option>Cargando tus clases…</option></select></label>'+
+      '<p class="status mc-st"></p>'+
+      '<div class="modal-foot">'+
+        '<button class="btn ghost modal-cancel">Cancelar</button>'+
+        '<button class="btn primary modal-ok" disabled>'+icon('importar')+'Añadir alumnado</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  var sel = ov.querySelector('.mc-sel'), st = ov.querySelector('.mc-st'), ok = ov.querySelector('.modal-ok');
+  function cerrar(){ if(ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); }
+  function onKey(e){ if(e.key==='Escape') cerrar(); }
+  document.addEventListener('keydown', onKey);
+  ov.addEventListener('mousedown', function(e){ if(e.target===ov) cerrar(); });
+  ov.querySelector('.modal-x').onclick = cerrar;
+  ov.querySelector('.modal-cancel').onclick = cerrar;
+
+  function pintar(lista){
+    if(!lista.length){ sel.innerHTML = '<option>No tienes clases activas en Classroom</option>'; return; }
+    sel.innerHTML = lista.map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.nombre)+'</option>'; }).join('');
+    sel.disabled = false; ok.disabled = false; sel.focus();
+  }
+  if(CLASSROOM_CURSOS) pintar(CLASSROOM_CURSOS);
+  else google.script.run
+    .withSuccessHandler(function(l){ CLASSROOM_CURSOS = l || []; pintar(CLASSROOM_CURSOS); })
+    .withFailureHandler(function(e){ sel.innerHTML = '<option>—</option>'; setStatus(st, mensajeClassroom(e), 'err'); })
+    .getClassroomCursos();
+
+  ok.onclick = function(){
+    var clase = (CLASSROOM_CURSOS||[]).filter(function(c){ return c.id === sel.value; })[0];
+    if(!clase) return;
+    ok.disabled = true; setStatus(st, 'Trayendo el alumnado de «'+clase.nombre+'»…', 'busy');
+    google.script.run
+      .withSuccessHandler(function(lista){ cerrar(); onElegir(clase, lista || []); })
+      .withFailureHandler(function(e){ ok.disabled = false; setStatus(st, mensajeClassroom(e), 'err'); })
+      .getClassroomAlumnos(clase.id);
+  };
+}
+
+function mensajeClassroom(e){
+  var m = (e && e.message) ? e.message : String(e);
+  if(/Classroom is not defined|has not been used|disabled/i.test(m)) return 'La API de Google Classroom no está activada en este proyecto. Avisa al administrador.';
+  if(/permission|PERMISSION_DENIED|403/i.test(m)) return 'Classroom no ha dado permiso para leer tus clases. Vuelve a abrir la web y acepta los permisos de Classroom.';
+  return mensajeError(e);
+}
 </script>

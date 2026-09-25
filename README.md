@@ -53,6 +53,7 @@ sola y se avisa por correo.
 | `WebApp.gs` | `doGet` (3 estados) + API que llama el cliente |
 | `DatosCentral.gs` | Contactos del centro (almacén) y propios (por usuario) + parseo de pegado |
 | `Alumnado.gs` | Cursos/tutorías: roles tutor y alumno, contactos de clase |
+| `Classroom.gs` | Importar alumnado desde Google Classroom (clases del docente) |
 | `Grupos.gs` | Pertenencia al claustro (grupo de Google y/o lista) |
 | `Contactos.gs` | Núcleo People API: crear/actualizar/fusionar/traer/eliminar |
 | `SincronizacionDiaria.gs` | Disparador diario por usuario |
@@ -76,7 +77,8 @@ y oscuro, con iconos SVG (sin emojis):
 - **Mis contactos** (todos): sincronizar el centro por grupos, contactos
   propios, sincronización diaria y gestión de los contactos de Google.
 - **Alumnado** (admin y profesorado): cursos con su tutor/a, alumnado (editable,
-  importable desde Séneca) y profesorado del curso. El nombre del curso es la
+  importable desde Séneca o **directamente desde Google Classroom** eligiendo
+  la clase en un desplegable) y profesorado del curso. El nombre del curso es la
   etiqueta del grupo. El admin ve todos, filtra por curso y asigna tutores.
   Las bajas de alumnos (o cursos renombrados/borrados) retiran la etiqueta en
   la siguiente sincronización de sus compañeros y profesorado.
@@ -116,7 +118,7 @@ respaldo para que la detección del admin sea fiable en la web app.
 
 1. Copiar la plantilla (**proyecto standalone**) — cada admin la suya.
 2. Crear proyecto de Google Cloud **Interno** y enlazarlo (evita el aviso de
-   app no verificada). Habilitar People API.
+   app no verificada). Habilitar People API y Google Classroom API.
 3. Desplegar como **aplicación web**: ejecutar como *usuario que accede*, acceso
    *cualquier usuario de g.educaand.es*.
 4. Abrir la URL como admin → completar el **asistente**.
