@@ -219,8 +219,23 @@ window.TABS.alumnado = {
           if(e) ya[e] = true;
           fila({ nombre:c.nombre, apellidos:c.apellidos, email:e, alias:c.alias||'' }); n++;
         });
+        ordenarFilas();
         aplicarZebra(tb); contar();
         return n;
+      }
+
+      /** Ordena la tabla alfabéticamente por apellidos y, a igualdad, por nombre
+       *  (sin distinguir acentos ni mayúsculas). Las filas vacías van al final. */
+      function ordenarFilas(){
+        function val(tr, k){ var i = tr.querySelector('input[data-k="'+k+'"]'); return i ? i.value.trim() : ''; }
+        var filas = Array.prototype.slice.call(tb.querySelectorAll('tr'));
+        filas.sort(function(a, b){
+          var aa = val(a,'apellidos'), ab = val(b,'apellidos');
+          if(!aa !== !ab) return aa ? -1 : 1;
+          return aa.localeCompare(ab, 'es', { sensitivity:'base' }) ||
+                 val(a,'nombre').localeCompare(val(b,'nombre'), 'es', { sensitivity:'base' });
+        });
+        filas.forEach(function(tr){ tb.appendChild(tr); });
       }
 
       card.querySelector('.cClass').onclick = function(){

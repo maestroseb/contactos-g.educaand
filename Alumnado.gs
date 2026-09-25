@@ -354,6 +354,9 @@ function guardarCurso(curso) {
     if (e) aluSet[e] = true;
     alumnos.push(al ? { nombre: n, apellidos: ap, email: e, alias: al } : { nombre: n, apellidos: ap, email: e });
   });
+  // Siempre ordenado por apellidos y nombre.
+  alumnos.sort((a, b) => (a.apellidos || '\uffff').localeCompare(b.apellidos || '\uffff', 'es', { sensitivity: 'base' }) ||
+    a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
   if (invalidos.length) {
     throw new Error('Correos no válidos (deben ser @g.educaand.es): ' + invalidos.slice(0, 5).join(', ') + (invalidos.length > 5 ? '…' : ''));
   }
