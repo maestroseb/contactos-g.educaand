@@ -5,14 +5,9 @@
  * hoja. Los contactos propios de cada usuario van en sus UserProperties.
  */
 
-/** Contactos del centro (los que sincroniza el claustro). */
-function leerContactosCentro_() {
-  return leerContactosCentroStore_();
-}
-
 /** Etiquetas/grupos presentes en los contactos del centro (para la vista). */
 function gruposDelCentro_() {
-  return gruposDe_(leerContactosCentro_());
+  return gruposDe_(leerContactosCentroStore_());
 }
 
 /** Etiquetas presentes en una lista de contactos, ordenadas. */
@@ -331,15 +326,18 @@ function troceaEtiquetas_(v) {
 
 const CLAVE_CONTACTOS_PROPIOS_ = 'contactosPropios';
 
-/** Devuelve los contactos propios del usuario (array de objetos). */
+/** Devuelve los contactos propios del usuario (array de objetos). Troceados
+ *  en UserProperties para no chocar con el límite de ~9 KB por propiedad. */
 function leerContactosPropios_() {
-  const raw = PropertiesService.getUserProperties().getProperty(CLAVE_CONTACTOS_PROPIOS_);
-  if (!raw) return [];
-  try { return JSON.parse(raw); } catch (e) { return []; }
+  const props = PropertiesService.getUserProperties();
+  const raw = props.getProperty(CLAVE_CONTACTOS_PROPIOS_);   // formato antiguo (una propiedad)
+  if (raw) { try { return JSON.parse(raw); } catch (e) { return []; } }
+  return leerTrozos_(CLAVE_CONTACTOS_PROPIOS_ + '_', CLAVE_CONTACTOS_PROPIOS_ + 'Num', null, props);
 }
 
 /** Guarda los contactos propios del usuario. */
 function guardarContactosPropios_(lista) {
-  PropertiesService.getUserProperties()
-    .setProperty(CLAVE_CONTACTOS_PROPIOS_, JSON.stringify(lista || []));
+  const props = PropertiesService.getUserProperties();
+  guardarTrozos_(CLAVE_CONTACTOS_PROPIOS_ + '_', CLAVE_CONTACTOS_PROPIOS_ + 'Num', null, lista || [], props);
+  props.deleteProperty(CLAVE_CONTACTOS_PROPIOS_);
 }

@@ -96,11 +96,21 @@ En el primer uso, el admin entra directamente en «Configuración» (con aviso d
 pendiente). El correo del usuario se resuelve con `getEffectiveUser` como
 respaldo para que la detección del admin sea fiable en la web app.
 
+**Robustez y rendimiento (v4.1):**
+
+- Almacén troceado con lectura en una llamada, escritura atómica (sin quedar
+  vacío a medias), memoria por ejecución y bloqueo en todas las escrituras.
+- Sincronización con bloqueo por usuario, una sola lectura de contactos,
+  etiquetas paginadas, reintentos solo ante errores transitorios y lotes.
+- Validación en el servidor: correos del alumnado `@g.educaand.es`, profesorado
+  del claustro, nombres de curso que no choquen con etiquetas del claustro,
+  límites de tamaño y comprobación de espacio antes de guardar.
+
 **Pendiente / mejoras:**
 
-- Edición en línea de los contactos ya existentes en "Mis contactos de Google".
-- Si un claustro es muy grande, revisar límites del almacén (ya se trocea).
-- Exportar/backup del claustro fuera del proyecto.
+- El primer usuario que abre la web queda como administrador: abre tú la URL
+  justo después de desplegar.
+- Exportar/backup del almacén fuera del proyecto.
 
 ## Puesta en marcha (resumen)
 

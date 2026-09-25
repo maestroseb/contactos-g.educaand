@@ -4,7 +4,11 @@ function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
 /** Hue estable (0-359) a partir de una cadena (para colorear chips de etiqueta). */
 function hue(s){ var h=0; s=String(s); for(var i=0;i<s.length;i++) h=(h*31 + s.charCodeAt(i))>>>0; return h%360; }
 /** SVG de la «x» de un chip. */
-function cerrarSvg(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'; }
+function cerrarSvg(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">'+window.ICON.cerrar+'</svg>'; }
+/** Quita menús de autocompletado huérfanos (antes de repintar una rejilla). */
+function limpiarMenusFlotantes(){
+  Array.prototype.forEach.call(document.querySelectorAll('.ac-fixed'), function(m){ if(m.parentNode) m.parentNode.removeChild(m); });
+}
 
 /** Normaliza para comparar/buscar sin acentos ni mayúsculas. */
 function normEtq_(s){ return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
@@ -118,6 +122,9 @@ function mensajeError(e){
   if(m.indexOf('NO_MIEMBRO')!==-1) return 'No puedes sincronizar los contactos del centro porque no perteneces al claustro ni al alumnado.';
   if(m.indexOf('NO_AUTORIZADO')!==-1) return 'No tienes permisos de administrador.';
   if(m.indexOf('NO_PRINCIPAL')!==-1) return 'Solo el administrador principal puede hacer esto.';
+  if(m.indexOf('EN_CURSO')!==-1) return 'Ya hay una sincronización en marcha. Espera a que termine.';
+  if(m.indexOf('ALMACEN_LLENO')!==-1) return 'El almacén de la aplicación está casi lleno. Avisa al administrador.';
+  if(m.indexOf('ALMACEN_OCUPADO')!==-1) return 'Otra persona está guardando en este momento. Inténtalo de nuevo en unos segundos.';
   return 'Se ha producido un error: '+m;
 }
 function resumenTexto(r){
@@ -134,11 +141,14 @@ var _scriptsCargados = {};
 
 /** Inyecta un <script> externo una sola vez y avisa por callback(err). */
 function cargarScript_(url, cb){
-  if(_scriptsCargados[url] === 'ok') return cb(null);
+  var st = _scriptsCargados[url];
+  if(st === 'ok') return cb(null);
+  if(Array.isArray(st)){ st.push(cb); return; }   // ya se está cargando: se encola
+  var cola = _scriptsCargados[url] = [cb];
   var s = document.createElement('script');
   s.src = url; s.async = true;
-  s.onload = function(){ _scriptsCargados[url] = 'ok'; cb(null); };
-  s.onerror = function(){ cb(new Error('No se pudo cargar '+url)); };
+  s.onload = function(){ _scriptsCargados[url] = 'ok'; cola.forEach(function(f){ f(null); }); };
+  s.onerror = function(){ delete _scriptsCargados[url]; cola.forEach(function(f){ f(new Error('No se pudo cargar '+url)); }); };
   document.head.appendChild(s);
 }
 
@@ -336,9 +346,6 @@ function correr(btn, st, cargando, runFn, okFn){
     .withFailureHandler(function(e){ if(btn) btn.disabled=false; setStatus(st, mensajeError(e), 'err'); }));
 }
 
-/** Orden de columnas de las rejillas de contactos. */
-var ORDEN_COLS = ['nombre','apellidos','alias','email','telefono','puesto','grupos'];
-
 /** ¿El texto contiene TODAS las palabras de la búsqueda? (sin acentos ni mayúsculas). */
 function coincideBusqueda(texto, q){
   q = String(q||'').trim();
@@ -406,15 +413,18 @@ function habilitarPegado(tbody, anadirFila){
     var texto = (e.clipboardData || window.clipboardData).getData('text');
     if(!texto || (texto.indexOf('\t') === -1 && texto.indexOf('\n') === -1)) return; // valor simple → pegado normal
     e.preventDefault();
-    var startCol = ORDEN_COLS.indexOf(inp.getAttribute('data-k'));
+    // Columna de partida = posición del input en SU fila (sirve para rejillas de
+    // cualquier número de columnas). Las filas ocultas por un filtro no cuentan.
+    var startCol = Array.prototype.indexOf.call(inp.closest('tr').querySelectorAll('input[data-k]'), inp);
     if(startCol < 0) startCol = 0;
-    var trs = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+    function visibles(){ return Array.prototype.filter.call(tbody.querySelectorAll('tr'), function(tr){ return !tr.hidden; }); }
+    var trs = visibles();
     var startRow = trs.indexOf(inp.closest('tr'));
     var lineas = texto.replace(/\r/g,'').split('\n');
     if(lineas.length && lineas[lineas.length-1] === '') lineas.pop();
     lineas.forEach(function(linea, r){
-      if(anadirFila){ while(tbody.querySelectorAll('tr').length <= startRow + r) anadirFila(tbody, {}); }
-      var fila = tbody.querySelectorAll('tr')[startRow + r];
+      if(anadirFila){ while(visibles().length <= startRow + r) anadirFila(tbody, {}); }
+      var fila = visibles()[startRow + r];
       if(!fila) return;   // sin creación de filas: se ignoran los sobrantes
       var inputs = fila.querySelectorAll('input[data-k]');
       linea.split('\t').forEach(function(val, c){
@@ -431,7 +441,15 @@ function habilitarPegado(tbody, anadirFila){
  * en caché). Si el sondeo no llega en paralelo, la barra se anima y salta a
  * 100% al terminar.
  */
+var SYNC_EN_CURSO = false;
+/** Activa/desactiva todos los controles de sincronización de la cabecera. */
+function bloquearSync(si){
+  SYNC_EN_CURSO = si;
+  ['hSync','hSyncMenu','pSync','hDiaria'].forEach(function(id){ var b = document.getElementById(id); if(b) b.disabled = si; });
+}
 function lanzarSincronizacion(btn, st, opciones, onDone){
+  if(SYNC_EN_CURSO) return;
+  bloquearSync(true);
   if(btn) btn.disabled = true;
   var barra = document.createElement('div');
   barra.className = 'progress indeterminate';
@@ -441,9 +459,13 @@ function lanzarSincronizacion(btn, st, opciones, onDone){
   var fin = false, determinada = false;
   setStatus(st, 'Preparando…', 'busy');
 
-  var poll = setInterval(function(){
+  // Sondeo encadenado: la siguiente consulta sale solo cuando vuelve la anterior.
+  function sondear(){
+    if(fin) return;
     google.script.run.withSuccessHandler(function(p){
-      if(fin || !p) return;
+      if(fin) return;
+      setTimeout(sondear, 2000);
+      if(!p) return;
       if(p.fase === 'guardando'){
         if(!determinada){ barra.classList.remove('indeterminate'); determinada = true; }
         relleno.style.width = '92%';
@@ -457,24 +479,23 @@ function lanzarSincronizacion(btn, st, opciones, onDone){
         relleno.style.width = pct + '%';
         setStatus(st, 'Sincronizando… ' + p.hechos + ' de ' + p.total, 'busy');
       }
-    }).getProgresoSync();
-  }, 1200);
+    }).withFailureHandler(function(){ if(!fin) setTimeout(sondear, 4000); }).getProgresoSync();
+  }
+  setTimeout(sondear, 1500);
 
   google.script.run
     .withSuccessHandler(function(res){
-      fin = true; clearInterval(poll);
+      fin = true; bloquearSync(false);
       barra.classList.remove('indeterminate');
       relleno.style.width = '100%';
       setStatus(st, resumenTexto(res), 'ok');
       setTimeout(function(){ if(barra.parentNode) barra.parentNode.removeChild(barra); }, 1400);
-      if(btn) btn.disabled = false;
       if(onDone) onDone(true);
     })
     .withFailureHandler(function(e){
-      fin = true; clearInterval(poll);
+      fin = true; bloquearSync(false);
       if(barra.parentNode) barra.parentNode.removeChild(barra);
       setStatus(st, mensajeError(e), 'err');
-      if(btn) btn.disabled = false;
       if(onDone) onDone(false);
     })
     .sincronizarAhora(opciones);
@@ -509,13 +530,17 @@ function creditosHtml(){
 
 /* ===================== Arranque ===================== */
 window.TABS = window.TABS || {};
-var ESTADO = null, TAB_ACTIVA = null, PANELS = {};
+var ESTADO = null, PANELS = {};
 
 /** Fuerza que una pestaña se vuelva a construir la próxima vez que se abra
  *  (p. ej. tras cambiar la configuración, para refrescar «Contactos del centro»). */
 function invalidarTab(key){
   var p = PANELS[key];
-  if(p){ if(p.parentNode) p.parentNode.removeChild(p); delete PANELS[key]; }
+  if(!p) return;
+  // Con cambios sin guardar no se descarta: se reconstruirá al abrirla limpia.
+  if(p._sucio && p._sucio()){ p._obsoleto = true; return; }
+  if(p.parentNode) p.parentNode.removeChild(p);
+  delete PANELS[key];
 }
 
 document.addEventListener('DOMContentLoaded', function(){ recargarApp(); });
@@ -567,9 +592,9 @@ function construirShell(estado, preferida){
   var etiquetaUsuario = nombreUsuario || estado.email || '—';
   var inicial = (nombreUsuario || estado.email || '?').trim().charAt(0).toUpperCase() || '?';
   var avatarHtml = estado.fotoUsuario
-    ? '<img class="avatar" src="'+esc(estado.fotoUsuario)+'" alt="" referrerpolicy="no-referrer" '+
-      'onerror="this.outerHTML=\'<span class=&quot;avatar&quot;>'+esc(inicial)+'</span>\'">'
+    ? '<img class="avatar" src="'+esc(estado.fotoUsuario)+'" alt="" referrerpolicy="no-referrer">'
     : '<span class="avatar">'+esc(inicial)+'</span>';
+  var avatarFallo = '<span class="avatar">'+esc(inicial)+'</span>';
   var necesitaConfig = estado.esAdmin && !estado.configurado;
 
   var nav = tabs.map(function(t){
@@ -618,6 +643,9 @@ function construirShell(estado, preferida){
   Array.prototype.forEach.call(document.querySelectorAll('.tabbar button'), function(b){
     b.onclick = function(){ irATab(b.getAttribute('data-tab')); };
   });
+  // Si la foto de perfil no carga, se sustituye por la inicial.
+  var img = document.querySelector('img.avatar');
+  if(img) img.addEventListener('error', function(){ img.outerHTML = avatarFallo; });
 
   // Sincronización manual desde la cabecera (todo: centro + propios).
   document.getElementById('hSync').onclick = function(){ ejecutarSync({incluirCentro:true, incluirPropios:true}); };
@@ -635,7 +663,13 @@ function construirShell(estado, preferida){
     '<button class="btn primary sm" id="pSync" style="width:100%;justify-content:center;margin-top:8px">'+icon('sync')+'Sincronizar selección</button>';
 
   document.getElementById('hSyncMenu').onclick = function(e){ e.stopPropagation(); pop.hidden = !pop.hidden; };
-  document.addEventListener('click', function(e){ if(!pop.hidden && !pop.contains(e.target) && e.target.id!=='hSyncMenu') pop.hidden=true; });
+  if(!window._popClicEnganchado){   // una sola vez (el shell se reconstruye al recargar)
+    window._popClicEnganchado = true;
+    document.addEventListener('click', function(e){
+      var p = document.getElementById('syncPop');
+      if(p && !p.hidden && !p.contains(e.target) && e.target.id!=='hSyncMenu') p.hidden = true;
+    });
+  }
   pop.addEventListener('click', function(e){ e.stopPropagation(); });
   /** Grupos de alumnos (cursos en los que da clase) que el docente sincroniza
    *  además del claustro. La marca se guarda y la usa también la diaria. */
@@ -661,13 +695,12 @@ function construirShell(estado, preferida){
     var sel = Array.prototype.map.call(pop.querySelectorAll('.gsel:checked'), function(c){ return c.value; });
     var propios = document.getElementById('pProp').checked;
     var todosMarcados = sel.length === grupos.length;
+    var claustro = grupos.length ? sel.length > 0 : true;   // sin etiquetas: el claustro entero
+    var cursos = document.getElementById('popCursos') ? cursosMarcados() : null;
     pop.hidden = true;
-    var opciones = { incluirCentro: sel.length>0 || cursosMarcados().length>0, gruposCentro: todosMarcados?[]:sel, incluirPropios: propios };
-    if(!document.getElementById('popCursos')) return ejecutarSync(opciones);
-    google.script.run
-      .withSuccessHandler(function(){ ejecutarSync(opciones); })
-      .withFailureHandler(function(e){ modalAviso(mensajeError(e)); })
-      .guardarCursosSync(cursosMarcados());
+    // Una sola llamada: el servidor guarda la selección de cursos y sincroniza.
+    ejecutarSync({ incluirCentro: claustro || !!(cursos && cursos.length), soloCursos: !claustro,
+      gruposCentro: todosMarcados ? [] : sel, incluirPropios: propios, cursos: cursos });
   };
 
   function ejecutarSync(opciones){
@@ -699,7 +732,6 @@ function construirShell(estado, preferida){
 }
 
 function irATab(key){
-  TAB_ACTIVA = key;
   var t = window.TABS[key];
   Array.prototype.forEach.call(document.querySelectorAll('.tabbar button'), function(b){
     b.classList.toggle('active', b.getAttribute('data-tab')===key);
@@ -713,6 +745,7 @@ function irATab(key){
 
   // Si esta pestaña ya se cargó, solo se muestra (instantáneo, conserva su estado).
   var panel = PANELS[key];
+  if(panel && panel._obsoleto && !(panel._sucio && panel._sucio())){ invalidarTab(key); panel = null; }
   if(!panel){
     panel = document.createElement('div');
     panel.className = 'tabpanel';

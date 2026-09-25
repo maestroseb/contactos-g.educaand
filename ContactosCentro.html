@@ -78,6 +78,7 @@ window.TABS.contactosCentro = {
       if(vacio) vacio.hidden = !(filtrando && visibles === 0);
       if(tabla) tabla.hidden = (filtrando && visibles === 0);
       actualizarCuenta();
+      if(zona._sincronizarSelAll) zona._sincronizarSelAll();
     }
 
     // Pegar en bloque tipo hoja de cálculo (p. ej. una columna de teléfonos). Se
@@ -91,19 +92,22 @@ window.TABS.contactosCentro = {
       var texto = (e.clipboardData || window.clipboardData).getData('text');
       if(!texto || (texto.indexOf('\t') === -1 && texto.indexOf('\n') === -1)) return; // valor simple → pegado normal
       e.preventDefault();
-      var id = inp.closest('tr').getAttribute('data-id');
-      var startRow = FILAS.map(function(f){ return f.id; }).indexOf(id); if(startRow < 0) return;
+      // Se rellenan las filas VISIBLES a partir de la actual; si faltan, se añaden.
+      var ids = Array.prototype.filter.call(zona.querySelectorAll('tbody tr'), function(tr){ return !tr.hidden; })
+        .map(function(tr){ return tr.getAttribute('data-id'); });
+      var startRow = ids.indexOf(inp.closest('tr').getAttribute('data-id')); if(startRow < 0) return;
       var lineas = texto.replace(/\r/g,'').split('\n');
       if(lineas.length && lineas[lineas.length-1] === '') lineas.pop();
       lineas.forEach(function(linea, r){
-        while(FILAS.length <= startRow + r) FILAS.push(filaVacia());
-        var f = FILAS[startRow + r];
+        var f = IDX[ids[startRow + r]];
+        if(!f){ f = filaVacia(); FILAS.push(f); }
         linea.split('\t').forEach(function(val, c){ var campo = COLS_TXT[startCol + c]; if(campo) f[campo] = val.trim(); });
       });
       renderGrid(); revisarClaustro();
     });
 
     // Serializa lo que se guardaría; si coincide con lo cargado, no hay cambios.
+    cont._sucio = function(){ return filasInicial !== null && serializarFilas() !== filasInicial; };
     function serializarFilas(){
       return JSON.stringify(FILAS.map(paraGuardar).filter(function(f){ return f.email||f.nombre; }));
     }
@@ -136,10 +140,11 @@ window.TABS.contactosCentro = {
     };
     cont.querySelector('#claustroSave').onclick = function(){
       var filas = FILAS.map(paraGuardar).filter(function(f){ return f.email||f.nombre; });
+      var enviado = JSON.stringify(filas);   // lo guardado es lo enviado (no lo editado mientras tanto)
       correr(this, cont.querySelector('#sAdmin'), 'Guardando…',
         function(r){ r.adminGuardarContactos(filas); },
         function(res, st){
-          filasInicial = serializarFilas(); revisarClaustro();
+          filasInicial = enviado; revisarClaustro();
           var n = (res && typeof res === 'object') ? res.n : res;
           var pausadas = filas.filter(function(f){ return f.pausado; }).length;
           var msg = 'Guardado: '+n+' personas en el claustro'+(pausadas ? ' ('+(n-pausadas)+' activas · '+pausadas+' en pausa)' : '')+'.';
@@ -371,12 +376,15 @@ window.TABS.contactosCentro = {
           .withFailureHandler(function(e){
             setStatus(cont.querySelector('#sAdmin'), 'Renombrada en la lista, pero la sugerencia de Configuración no se pudo actualizar: '+mensajeError(e), 'err');
           })
-          .guardarConfiguracion({ etiquetas: cats });
+          .guardarConfiguracion({ etiquetas: cats, soloEtiquetas: true });
       }
     }
 
     /* ---------- rejilla ---------- */
+    var IDX = {};   // id -> fila (búsqueda O(1))
     function renderGrid(){
+      limpiarMenusFlotantes();
+      IDX = {}; FILAS.forEach(function(f){ IDX[f.id] = f; });
       var html = '<div class="tablewrap"><table class="rejilla claustro'+(armado?' asignando':'')+'">'+
         '<colgroup><col style="width:3%"><col style="width:12%"><col style="width:13%"><col style="width:8%">'+
         '<col style="width:15%"><col style="width:9%"><col style="width:12%"><col style="width:21%"><col style="width:7%"></colgroup>'+
@@ -409,15 +417,21 @@ window.TABS.contactosCentro = {
       // selección: marcar/desmarcar todas actúa in situ (sin repintar) para que
       // «desmarcar todas» funcione y la casilla de cabecera refleje el estado real.
       var selall = zona.querySelector('.selall');
+      // «Marcar todas» actúa solo sobre las filas VISIBLES (las ocultas por la
+      // búsqueda o el filtro no se marcan ni reciben acciones en bloque).
+      function filasVisibles(){ return Array.prototype.filter.call(zona.querySelectorAll('tbody tr'), function(tr){ return !tr.hidden; }); }
       function sincronizarSelAll(){
-        var total = FILAS.length, marcadas = FILAS.filter(function(f){ return SEL.has(f.id); }).length;
+        var vis = filasVisibles(), total = vis.length;
+        var marcadas = vis.filter(function(tr){ return SEL.has(tr.getAttribute('data-id')); }).length;
         selall.checked = total > 0 && marcadas === total;
         selall.indeterminate = marcadas > 0 && marcadas < total;
       }
+      zona._sincronizarSelAll = sincronizarSelAll;
       selall.onchange = function(){
         var check = selall.checked;
-        FILAS.forEach(function(f){ check ? SEL.add(f.id) : SEL.delete(f.id); });
-        Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
+        filasVisibles().forEach(function(tr){
+          var id = tr.getAttribute('data-id');
+          check ? SEL.add(id) : SEL.delete(id);
           var c = tr.querySelector('.sel'); if(c) c.checked = check; tr.classList.toggle('marcada', check);
         });
         selall.indeterminate = false;
@@ -491,22 +505,21 @@ window.TABS.contactosCentro = {
       if(pintando){ pintando=false; document.body.style.userSelect=''; if(document.contains(zona)) renderGrid(); }
       if(rafScroll != null){ cancelAnimationFrame(rafScroll); rafScroll = null; }
     }
-    document.addEventListener('pointermove', onPaintMove);
-    document.addEventListener('pointerup', finPintura);
-    document.addEventListener('pointercancel', finPintura);
+    // Escuchas globales ligadas a ESTE render: se retiran al reconstruir la pestaña.
+    if(window._ccAbort) window._ccAbort.abort();
+    var ac = window._ccAbort = new AbortController();
+    document.addEventListener('pointermove', onPaintMove, { signal: ac.signal });
+    document.addEventListener('pointerup', finPintura, { signal: ac.signal });
+    document.addEventListener('pointercancel', finPintura, { signal: ac.signal });
 
     function aplicarPintura(tr, f){
       if(pintadas[f.id]) return; pintadas[f.id]=true;
       toggleTag(f, armado, accionPintar);
-      pintarCelda(tr, f);
-    }
-    function pintarCelda(tr, f){
-      // El editor de la celda comparte el array f.grupos (mutado por toggleTag),
-      // así que basta con pedirle que se repinte.
+      // El editor de la celda comparte f.grupos (mutado por toggleTag): basta con repintarlo.
       if(tr._chipRender) tr._chipRender();
     }
     function tieneTag(f, tag){ return (f.grupos||[]).some(function(x){ return x.toLowerCase()===tag.toLowerCase(); }); }
-    function filaId(id){ return FILAS.filter(function(x){ return x.id===id; })[0]; }
+    function filaId(id){ return IDX[id] || FILAS.filter(function(x){ return x.id===id; })[0]; }
 
     function celdaTxt(f,k){
       var v = f[k]||'';
@@ -516,7 +529,7 @@ window.TABS.contactosCentro = {
       }
       return '<td><input data-k="'+k+'" value="'+esc(v)+'"></td>';
     }
-    function fila(el){ var tr=el.closest('tr'); var id=tr.getAttribute('data-id'); return FILAS.filter(function(x){return x.id===id;})[0]; }
+    function fila(el){ return filaId(el.closest('tr').getAttribute('data-id')); }
 
     function toggleTag(f, tag, add){
       f.grupos = f.grupos || [];

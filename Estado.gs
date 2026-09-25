@@ -42,10 +42,13 @@ function getAdminEmail_() {
 /** Fija el administrador si todavía no hay ninguno (primer usuario que entra). */
 function fijarAdminSiVacio_(email) {
   const props = PropertiesService.getScriptProperties();
-  if (!props.getProperty(PROP_ADMIN) && email) {
-    props.setProperty(PROP_ADMIN, email);
-  }
-  return props.getProperty(PROP_ADMIN) || '';
+  const actual = props.getProperty(PROP_ADMIN);
+  if (actual || !email) return actual || '';
+  // Con bloqueo, para que dos primeras visitas simultáneas no se pisen.
+  return conBloqueo_(function () {
+    if (!props.getProperty(PROP_ADMIN)) props.setProperty(PROP_ADMIN, email);
+    return props.getProperty(PROP_ADMIN) || '';
+  });
 }
 
 /** ¿Es este correo el administrador PRINCIPAL (el original, no eliminable)? */
@@ -119,6 +122,11 @@ function setAdminsExtra_(lista) {
 
 /** Devuelve el objeto de configuración del centro (o null si no hay). */
 function getConfig_() {
+  if (MEMO_.config !== undefined) return MEMO_.config;
+  return (MEMO_.config = leerConfig_());
+}
+
+function leerConfig_() {
   const cache = cacheScript_();
   if (cache) {
     const c = cache.get(CACHE_CONFIG);
@@ -135,6 +143,7 @@ function getConfig_() {
 function setConfig_(obj) {
   const json = JSON.stringify(obj || {});
   PropertiesService.getScriptProperties().setProperty(PROP_CONFIG, json);
+  MEMO_.config = obj || {};
   const cache = cacheScript_();
   if (cache) { try { cache.put(CACHE_CONFIG, json, CACHE_TTL); } catch (e) {} }
 }
@@ -163,60 +172,80 @@ function leerContactosCentroStore_() {
 
 /** Guarda la lista de contactos del centro en el almacén (troceada + caché). */
 function guardarContactosCentroStore_(lista) {
+  MEMO_.emailsClaustro = null;
   guardarTrozos_(PROP_CONTACTOS_PREFIJO, PROP_CONTACTOS_NUM, CACHE_CONTACTOS, lista);
   return (lista || []).length;
 }
 
 /* --------------------- Almacén troceado genérico --------------------- *
  * Un array JSON guardado en varias propiedades (prefijo + i) para no superar
- * el límite por propiedad, con copia en la caché compartida del script. */
+ * el límite por propiedad (~9 KB). Robusto y rápido:
+ *  - lectura con UNA llamada (getProperties) y memoria por ejecución;
+ *  - escritura de todos los trozos + contador en UNA llamada (setProperties) y
+ *    borrado posterior de los trozos sobrantes: nunca queda el almacén vacío a
+ *    medias;
+ *  - si el JSON no se puede leer (lectura durante una escritura), se reintenta
+ *    y NUNCA se cachea ni se devuelve una lista vacía falsa.
+ * Con `props` se puede usar sobre UserProperties (sin caché compartida). */
 
-function leerTrozos_(prefijo, propNum, claveCache) {
-  const cache = cacheScript_();
-  if (cache) {
+const MEMO_ = {};   // memoria por ejecución (se descarta al terminar la llamada)
+
+function bytes_(s) { return Utilities.newBlob(String(s)).getBytes().length; }
+
+function leerTrozos_(prefijo, propNum, claveCache, props, fresco) {
+  const compartido = !props;
+  const memoKey = (compartido ? 's:' : 'u:') + prefijo;
+  if (!fresco && MEMO_[memoKey] !== undefined) return MEMO_[memoKey];
+  const cache = compartido ? cacheScript_() : null;
+  if (cache && !fresco) {
     const c = cache.get(claveCache);
-    if (c !== null) { try { return JSON.parse(c); } catch (e) {} }
+    if (c !== null) { try { return (MEMO_[memoKey] = JSON.parse(c)); } catch (e) {} }
   }
-  const props = PropertiesService.getScriptProperties();
-  const n = parseInt(props.getProperty(propNum) || '0', 10);
-  let lista = [];
-  if (n) {
+  props = props || PropertiesService.getScriptProperties();
+  let lista = null;
+  for (let intento = 0; intento < 3 && lista === null; intento++) {
+    const todas = props.getProperties();
+    const n = parseInt(todas[propNum] || '0', 10);
+    if (!n) { lista = []; break; }
     let json = '';
-    for (let i = 0; i < n; i++) json += (props.getProperty(prefijo + i) || '');
-    try { lista = JSON.parse(json); } catch (e) { lista = []; }
+    for (let i = 0; i < n; i++) json += (todas[prefijo + i] || '');
+    try { lista = JSON.parse(json); } catch (e) { Utilities.sleep(300); }
   }
+  if (lista === null) throw new Error('ALMACEN_OCUPADO');
   if (cache) {
-    try {
-      const s = JSON.stringify(lista);
-      if (s.length < CACHE_MAX) cache.put(claveCache, s, CACHE_TTL);
-    } catch (e) {}
+    try { const s = JSON.stringify(lista); if (bytes_(s) < CACHE_MAX) cache.put(claveCache, s, CACHE_TTL); } catch (e) {}
   }
-  return lista;
+  return (MEMO_[memoKey] = lista);
 }
 
-function guardarTrozos_(prefijo, propNum, claveCache, lista) {
-  const props = PropertiesService.getScriptProperties();
-  const json = JSON.stringify(lista || []);
-  const TAM = 8000; // margen bajo el límite por propiedad
+function guardarTrozos_(prefijo, propNum, claveCache, lista, props) {
+  const compartido = !props;
+  props = props || PropertiesService.getScriptProperties();
+  lista = lista || [];
+  const json = JSON.stringify(lista);
+  const TAM = 3000; // caracteres por trozo: < 9 KB aunque todo sean acentos (3 bytes)
 
-  // Borra los trozos anteriores.
   const previos = parseInt(props.getProperty(propNum) || '0', 10);
-  for (let i = 0; i < previos; i++) props.deleteProperty(prefijo + i);
-
-  // Escribe los nuevos.
+  const nuevas = {};
   let trozos = 0;
-  for (let i = 0; i < json.length; i += TAM) {
-    props.setProperty(prefijo + trozos, json.substring(i, i + TAM));
-    trozos++;
-  }
-  props.setProperty(propNum, String(trozos));
+  for (let i = 0; i < json.length; i += TAM) nuevas[prefijo + (trozos++)] = json.substring(i, i + TAM);
+  nuevas[propNum] = String(trozos);
+  props.setProperties(nuevas);                              // una sola escritura
+  for (let i = trozos; i < previos; i++) props.deleteProperty(prefijo + i);   // sobrantes
 
-  // Refresca la caché compartida (o la invalida si es demasiado grande).
-  const cache = cacheScript_();
+  MEMO_[(compartido ? 's:' : 'u:') + prefijo] = lista;
+  const cache = compartido ? cacheScript_() : null;
   if (cache) {
-    try { if (json.length < CACHE_MAX) cache.put(claveCache, json, CACHE_TTL); else cache.remove(claveCache); }
+    try { if (bytes_(json) < CACHE_MAX) cache.put(claveCache, json, CACHE_TTL); else cache.remove(claveCache); }
     catch (e) {}
   }
+}
+
+/** Ejecuta fn con el bloqueo del script (escrituras del almacén compartido). */
+function conBloqueo_(fn) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) throw new Error('ALMACEN_OCUPADO');
+  try { return fn(); } finally { lock.releaseLock(); }
 }
 
 /* --------------------- Bajas del claustro (tombstones) --------------------- *
@@ -230,9 +259,11 @@ const CADUCIDAD_BAJAS_ = 180 * 24 * 3600 * 1000;  // 180 días
 
 /** Lee la lista de bajas [{email, grupos:[], ts}]. */
 function leerBajas_() {
+  // Compatibilidad: formato antiguo en una sola propiedad.
   const raw = PropertiesService.getScriptProperties().getProperty(PROP_BAJAS);
-  if (!raw) return [];
-  try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+  if (raw) { try { const a = JSON.parse(raw); if (Array.isArray(a)) return a; } catch (e) {} }
+  const a = leerTrozos_(PROP_BAJAS + '_', PROP_BAJAS + 'NumTrozos', 'cacheBajas_v1');
+  return Array.isArray(a) ? a : [];
 }
 
 /** Guarda la lista de bajas (podando antigüedad y tamaño). */
@@ -241,7 +272,8 @@ function guardarBajas_(bajas) {
   let lista = (bajas || []).filter(b => b && b.email && (!b.ts || (ahora - b.ts) < CADUCIDAD_BAJAS_));
   lista.sort((a, b) => (b.ts || 0) - (a.ts || 0));
   if (lista.length > MAX_BAJAS_) lista = lista.slice(0, MAX_BAJAS_);
-  PropertiesService.getScriptProperties().setProperty(PROP_BAJAS, JSON.stringify(lista));
+  guardarTrozos_(PROP_BAJAS + '_', PROP_BAJAS + 'NumTrozos', 'cacheBajas_v1', lista);
+  PropertiesService.getScriptProperties().deleteProperty(PROP_BAJAS);   // formato antiguo
 }
 
 /**

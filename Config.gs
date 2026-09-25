@@ -8,9 +8,8 @@
  */
 
 const PARAMS = {
-  version: 'Versión: 4.0 (Web App)',
+  version: 'Versión: 4.1 (Web App)',
   nombreApp: 'Asistente de Contactos',
-  icono: '👥',
 
   /** Sincronización diaria desatendida (disparador por usuario). */
   sincronizacionDiaria: {

@@ -7,23 +7,23 @@ window.TABS.configuracion = {
   render: function (cont, estado) {
     cont.innerHTML = '<div class="card"><p class="muted">Cargando configuración…</p></div>';
     google.script.run
-      .withSuccessHandler(function (s) { pintar(cont, estado, s); })
+      .withSuccessHandler(function (s) { pintarConfig(cont, estado, s); })
       .withFailureHandler(function (e) { cont.innerHTML = '<div class="card"><p class="status err">'+esc(mensajeError(e))+'</p></div>'; })
       .getEstadoConfig();
   }
 };
 
-function cat(e, k){ if(!e) return []; if(Array.isArray(e)) return (k==='grupo'?e:[]); return e[k]||[]; }
-function lineasDe(txt){ return String(txt||'').split('\n').map(function(s){return s.trim();}).filter(Boolean); }
+function catEtq(e, k){ if(!e) return []; if(Array.isArray(e)) return (k==='grupo'?e:[]); return e[k]||[]; }
+function lineasCfg(txt){ return String(txt||'').split('\n').map(function(s){return s.trim();}).filter(Boolean); }
 
-function pintar(cont, estado, s){
+function pintarConfig(cont, estado, s){
   var c = s.config || {}, d = s.defaults || {};
   var esp = (c.especialidades || d.especialidades || []).join('\n');
   var eC = c.etiquetas, eD = d.etiquetas || {};
-  var grupo = (cat(eC,'grupo').length ? cat(eC,'grupo') : cat(eD,'grupo')).join('\n');
-  var deptos = (cat(eC,'departamentos').length ? cat(eC,'departamentos') : cat(eD,'departamentos')).join('\n');
-  var cargos = (cat(eC,'cargos').length ? cat(eC,'cargos') : cat(eD,'cargos')).join('\n');
-  var otros = (cat(eC,'otros').length ? cat(eC,'otros') : cat(eD,'otros')).join('\n');
+  var grupo = (catEtq(eC,'grupo').length ? catEtq(eC,'grupo') : catEtq(eD,'grupo')).join('\n');
+  var deptos = (catEtq(eC,'departamentos').length ? catEtq(eC,'departamentos') : catEtq(eD,'departamentos')).join('\n');
+  var cargos = (catEtq(eC,'cargos').length ? catEtq(eC,'cargos') : catEtq(eD,'cargos')).join('\n');
+  var otros = (catEtq(eC,'otros').length ? catEtq(eC,'otros') : catEtq(eD,'otros')).join('\n');
   var pend = !estado.configurado;
 
   cont.innerHTML = [
@@ -129,7 +129,7 @@ function pintar(cont, estado, s){
     if(v===owner){ setStatus(st, 'Ese ya es el administrador principal.', ''); inp.value=''; return; }
     if(adminsLocal.indexOf(v)!==-1){ setStatus(st, 'Ya está en la lista.', ''); inp.value=''; return; }
     if(v.indexOf('@g.educaand.es')===-1) setStatus(st, 'Añadido. Aviso: no es @g.educaand.es y quizá no pueda entrar en la app.', '');
-    else setStatus(st, 'Añadido. Pulsa «Guardar administradores».', '');
+    else setStatus(st, 'Añadido. Pulsa «Guardar».', '');
     adminsLocal.push(v); inp.value=''; ocultarAC(); pintarAdmins();
   }
   cont.querySelector('#admAdd').onclick = function(){ addAdmin(); };
@@ -179,6 +179,7 @@ function pintar(cont, estado, s){
     });
   }
   var cfgInicial = serializarCfg();
+  cont._sucio = function(){ return !pend && serializarCfg() !== cfgInicial; };
   // Aparece solo si hay cambios reales; si los reviertes, vuelve a ocultarse.
   function mostrarGuardar(){ floatBtn.hidden = pend ? false : (serializarCfg() === cfgInicial); }
   if(pend) floatBtn.hidden = false;   // primera configuración: siempre visible
@@ -199,12 +200,12 @@ function pintar(cont, estado, s){
     var cfg = {
       codigoCentro: cont.querySelector('#codigo').value.trim(),
       nombreCentro: cont.querySelector('#nombre').value.trim(),
-      especialidades: lineasDe(cont.querySelector('#esp').value),
+      especialidades: lineasCfg(cont.querySelector('#esp').value),
       etiquetas: {
-        grupo: lineasDe(cont.querySelector('#etqGrupo').value),
-        departamentos: lineasDe(cont.querySelector('#etqDeptos').value),
-        cargos: lineasDe(cont.querySelector('#etqCargos').value),
-        otros: lineasDe(cont.querySelector('#etqOtros').value)
+        grupo: lineasCfg(cont.querySelector('#etqGrupo').value),
+        departamentos: lineasCfg(cont.querySelector('#etqDeptos').value),
+        cargos: lineasCfg(cont.querySelector('#etqCargos').value),
+        otros: lineasCfg(cont.querySelector('#etqOtros').value)
       }
     };
     if(!cfg.nombreCentro){ modalAviso('Falta el nombre del centro.'); return; }

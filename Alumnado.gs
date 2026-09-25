@@ -32,10 +32,12 @@ function etqProfesorado_(nombreCurso) { return 'Profesorado ' + nombreCurso; }
 function low_(e) { return String(e || '').trim().toLowerCase(); }
 
 function leerCursos_() {
-  return (leerTrozos_(PROP_ALUMNADO_PREFIJO, PROP_ALUMNADO_NUM, CACHE_ALUMNADO) || []).map(desempaquetarCurso_);
+  if (MEMO_.cursos) return MEMO_.cursos;
+  return (MEMO_.cursos = (leerTrozos_(PROP_ALUMNADO_PREFIJO, PROP_ALUMNADO_NUM, CACHE_ALUMNADO) || []).map(desempaquetarCurso_));
 }
 
 function guardarCursos_(lista) {
+  MEMO_.cursos = lista || [];
   guardarTrozos_(PROP_ALUMNADO_PREFIJO, PROP_ALUMNADO_NUM, CACHE_ALUMNADO, (lista || []).map(empaquetarCurso_));
 }
 
@@ -118,16 +120,20 @@ function cursosDeDocente_(email) {
 
 /** Rol principal para la interfaz: 'admin' | 'profesor' | 'alumno' | ''. */
 function rolDe_(email) {
-  if (esAdmin_(email)) return 'admin';
-  if (esMiembroClaustro_(email)) return 'profesor';
-  if (esAlumno_(email)) return 'alumno';
-  return '';
+  const k = 'rol:' + low_(email);
+  if (MEMO_[k] !== undefined) return MEMO_[k];
+  let rol = '';
+  if (esAdmin_(email)) rol = 'admin';
+  else if (esMiembroClaustro_(email)) rol = 'profesor';
+  else if (esAlumno_(email)) rol = 'alumno';
+  return (MEMO_[k] = rol);
 }
 
+/** ¿Es docente (admin o claustro)? */
+function esDocente_(email) { const r = rolDe_(email); return r === 'admin' || r === 'profesor'; }
+
 /** ¿Puede sincronizar «los contactos del centro» (lo que le corresponda)? */
-function puedeSincronizarCentro_(email) {
-  return esAdmin_(email) || esMiembroClaustro_(email) || esAlumno_(email);
-}
+function puedeSincronizarCentro_(email) { return !!rolDe_(email); }
 
 /* ------------------------- Contactos del alumno ------------------------- */
 
@@ -203,6 +209,7 @@ function leerCursosSync_() {
 function guardarCursosSync(ids) {
   const validos = {};
   const email = correoUsuarioActual_();
+  if (!esDocente_(email)) throw new Error('NO_AUTORIZADO');
   (esAdmin_(email) ? leerCursos_() : cursosDeDocente_(email)).forEach(c => { validos[c.id] = true; });
   const lista = (ids || []).filter(id => validos[id]);
   PropertiesService.getUserProperties().setProperty(CLAVE_CURSOS_SYNC_, JSON.stringify(lista));
@@ -210,7 +217,10 @@ function guardarCursosSync(ids) {
 }
 
 /** Endpoint: cursos elegibles del usuario actual (para refrescar el menú). */
-function getCursosSync() { return cursosElegibles_(correoUsuarioActual_()); }
+function getCursosSync() {
+  const email = correoUsuarioActual_();
+  return esDocente_(email) ? cursosElegibles_(email) : [];
+}
 
 /** Cursos que el docente puede elegir para sincronizar, con su marca actual. */
 function cursosElegibles_(email) {
@@ -221,8 +231,8 @@ function cursosElegibles_(email) {
 
 /* ----------------------- Bajas del alumnado ----------------------- */
 
-function leerBajasAlumnado_() {
-  const a = leerTrozos_(PROP_BAJAS_ALU_PREFIJO, PROP_BAJAS_ALU_NUM, CACHE_BAJAS_ALU);
+function leerBajasAlumnado_(fresco) {
+  const a = leerTrozos_(PROP_BAJAS_ALU_PREFIJO, PROP_BAJAS_ALU_NUM, CACHE_BAJAS_ALU, null, fresco);
   if (!Array.isArray(a)) return [];
   // Compacto: [correo, [etiquetas], ts en segundos, 1 si era alumno/a]
   return a.map(b => Array.isArray(b)
@@ -248,7 +258,7 @@ function registrarBajasCurso_(previo, nuevo) {
   const antes = pares(previo), despues = pares(nuevo);
   const ahora = Date.now();
   const bajas = {};
-  leerBajasAlumnado_().forEach(b => { bajas[low_(b.email)] = { grupos: b.grupos || [], ts: b.ts || ahora, alumno: !!b.alumno }; });
+  leerBajasAlumnado_(true).forEach(b => { bajas[low_(b.email)] = { grupos: b.grupos || [], ts: b.ts || ahora, alumno: !!b.alumno }; });
   // Correos que eran alumnado del curso (para borrarlos del profesorado).
   const eraAlumno = {};
   ((previo && previo.alumnos) || []).forEach(a => { if (a.email) eraAlumno[low_(a.email)] = true; });
@@ -289,74 +299,110 @@ function getAlumnado() {
   return { esAdmin: admin, yo: low_(email), cursos: cursos, claustro: claustro, uso: admin ? usoAlmacen_() : null };
 }
 
+/** Lectura sin memoria ni caché (dentro del bloqueo, antes de modificar). */
+function leerCursosFrescos_() {
+  return (MEMO_.cursos = (leerTrozos_(PROP_ALUMNADO_PREFIJO, PROP_ALUMNADO_NUM, CACHE_ALUMNADO, null, true) || []).map(desempaquetarCurso_));
+}
+
+/* Límites (evitan que un error o un abuso llene el almacén compartido). */
+const LIM_ = { cursosPorDocente: 30, alumnosPorCurso: 80, profesPorCurso: 80, texto: 80, nombreCurso: 60 };
+const RE_ALUMNO_ = /^[^@\s]+@g\.educaand\.es$/;
+
+/** Etiquetas reservadas: las del claustro y la configuración (en minúsculas). */
+function etiquetasReservadas_() {
+  const set = { mycontacts: true, starred: true, friends: true, family: true, coworkers: true, blocked: true };
+  gruposDelCentro_().forEach(g => { set[low_(g)] = true; });
+  etiquetasSugeridasDe_((getConfig_() || {}).etiquetas).forEach(g => { set[low_(g)] = true; });
+  return set;
+}
+
 /**
  * Crea o actualiza un curso.
  *  - Admin: todo, incluido el tutor/a.
  *  - Docente: crea cursos propios (queda como tutor/a) y edita los suyos
  *    (nombre, alumnado y profesorado); no puede cambiar el tutor/a.
- * Usa un bloqueo para que dos docentes guardando a la vez no se pisen.
+ * Valida en el servidor: nombre (no puede coincidir con etiquetas del claustro),
+ * correos del alumnado @g.educaand.es, profesorado del claustro y límites de
+ * tamaño. Usa el bloqueo del script y relee sin caché antes de modificar.
+ * Devuelve { curso, cursosSync } (para refrescar el menú sin otra llamada).
  */
 function guardarCurso(curso) {
   const email = correoUsuarioActual_();
   const admin = esAdmin_(email);
   if (!admin && !esMiembroClaustro_(email)) throw new Error('NO_AUTORIZADO');
   curso = curso || {};
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    const cursos = leerCursos_();
+  const t = v => String(v || '').trim().slice(0, LIM_.texto);
+
+  const nombre = String(curso.nombre || '').trim();
+  if (!nombre) throw new Error('Pon un nombre al curso.');
+  if (nombre.length > LIM_.nombreCurso) throw new Error('El nombre del curso es demasiado largo (máx. ' + LIM_.nombreCurso + ').');
+  if (/^profesorado\s/i.test(nombre) || etiquetasReservadas_()[low_(nombre)]) {
+    throw new Error('«' + nombre + '» ya es una etiqueta del claustro o reservada. Elige otro nombre para el curso.');
+  }
+
+  const claustro = emailsClaustro_();
+  const profSet = {};
+  const profesoresIn = (curso.profesores || []).map(low_).filter(e => e && claustro[e] && !profSet[e] && (profSet[e] = true));
+  if (profesoresIn.length > LIM_.profesPorCurso) throw new Error('Demasiado profesorado en el curso.');
+
+  const aluSet = {}, alumnos = [], invalidos = [];
+  (curso.alumnos || []).forEach(a => {
+    const e = low_(a && a.email), n = t(a && a.nombre), ap = t(a && a.apellidos);
+    if (!e && !n && !ap) return;
+    if (e && !RE_ALUMNO_.test(e)) { invalidos.push(e); return; }
+    if (e && aluSet[e]) return;
+    if (e) aluSet[e] = true;
+    alumnos.push({ nombre: n, apellidos: ap, email: e });
+  });
+  if (invalidos.length) {
+    throw new Error('Correos no válidos (deben ser @g.educaand.es): ' + invalidos.slice(0, 5).join(', ') + (invalidos.length > 5 ? '…' : ''));
+  }
+  if (alumnos.length > LIM_.alumnosPorCurso) throw new Error('Demasiados alumnos en un curso (máx. ' + LIM_.alumnosPorCurso + ').');
+
+  return conBloqueo_(function () {
+    const cursos = leerCursosFrescos_();
     const idx = curso.id ? cursos.findIndex(c => c.id === curso.id) : -1;
     const previo = idx >= 0 ? cursos[idx] : null;
     if (curso.id && !previo) throw new Error('El curso ya no existe. Recarga la página.');
     if (!admin && previo && low_(previo.tutor) !== low_(email)) throw new Error('NO_AUTORIZADO');
-
-    const nombre = String(curso.nombre || '').trim();
-    if (!nombre) throw new Error('Pon un nombre al curso.');
+    if (!admin && !previo && cursos.filter(c => low_(c.tutor) === low_(email)).length >= LIM_.cursosPorDocente) {
+      throw new Error('Has alcanzado el máximo de ' + LIM_.cursosPorDocente + ' cursos.');
+    }
     if (cursos.some((c, i) => i !== idx && low_(c.nombre) === low_(nombre))) {
       throw new Error('Ya existe un curso llamado «' + nombre + '».');
     }
-    const tutor = admin ? low_(curso.tutor) : (previo ? previo.tutor : low_(email));
-
-    const profSet = {};
-    const profesores = (curso.profesores || []).map(low_)
-      .filter(e => e && e !== tutor && !profSet[e] && (profSet[e] = true));
-
-    const aluSet = {};
-    const alumnos = [];
-    (curso.alumnos || []).forEach(a => {
-      const e = low_(a && a.email);
-      const n = String((a && a.nombre) || '').trim(), ap = String((a && a.apellidos) || '').trim();
-      if (!e && !n && !ap) return;
-      if (e && aluSet[e]) return;
-      if (e) aluSet[e] = true;
-      alumnos.push({ nombre: n, apellidos: ap, email: e });
-    });
+    let tutor = admin ? low_(curso.tutor) : (previo ? previo.tutor : low_(email));
+    if (admin && tutor && !claustro[tutor]) throw new Error('El tutor/a debe estar en el claustro.');
+    const profesores = profesoresIn.filter(e => e !== tutor);
 
     const limpio = { id: previo ? previo.id : Utilities.getUuid(), nombre: nombre, tutor: tutor, profesores: profesores, alumnos: alumnos };
+
+    // Comprobación de espacio antes de escribir.
+    const antes = previo ? bytes_(JSON.stringify(empaquetarCurso_(previo))) : 0;
+    const despues = bytes_(JSON.stringify(empaquetarCurso_(limpio)));
+    const uso = usoAlmacen_();
+    if (uso.bytes - antes + despues > uso.limite * 0.95) throw new Error('ALMACEN_LLENO');
+
     if (previo) cursos[idx] = limpio; else cursos.push(limpio);
     cursos.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es', { numeric: true }));
     guardarCursos_(cursos);
     registrarBajasCurso_(previo, limpio);
-    return limpio;
-  } finally {
-    lock.releaseLock();
-  }
+    return { curso: limpio, cursosSync: cursosElegibles_(email) };
+  });
 }
 
-/** Elimina un curso (admin, o su tutor/a). */
+/** Elimina un curso (admin, o su tutor/a si sigue en el claustro). Devuelve los cursosSync. */
 function eliminarCurso(id) {
   const email = correoUsuarioActual_();
-  const lock = LockService.getScriptLock();
-  lock.waitLock(20000);
-  try {
-    const cursos = leerCursos_();
+  if (!esDocente_(email)) throw new Error('NO_AUTORIZADO');
+  return conBloqueo_(function () {
+    const cursos = leerCursosFrescos_();
     const previo = cursos.filter(c => c.id === id)[0];
-    if (!previo) return true;
-    if (!esAdmin_(email) && low_(previo.tutor) !== low_(email)) throw new Error('NO_AUTORIZADO');
-    guardarCursos_(cursos.filter(c => c.id !== id));
-    registrarBajasCurso_(previo, null);
-    return true;
-  } finally {
-    lock.releaseLock();
-  }
+    if (previo) {
+      if (!esAdmin_(email) && low_(previo.tutor) !== low_(email)) throw new Error('NO_AUTORIZADO');
+      guardarCursos_(cursos.filter(c => c.id !== id));
+      registrarBajasCurso_(previo, null);
+    }
+    return { cursosSync: cursosElegibles_(email) };
+  });
 }
