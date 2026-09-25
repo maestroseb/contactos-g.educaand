@@ -8,7 +8,7 @@ window.TABS.misContactos = {
   render: function (cont, estado) {
     var seq = 0;
     // Rejilla de contactos de Google
-    var MIS = [], MIS_ORIG = {}, filtro = null, cargado = false, busquedaMis = '';
+    var MIS = [], MIS_ORIG = {}, filtro = null, cargado = false, busquedaMis = '', tBusq = null;
     // Rejilla de contactos propios
     var tb, propiosInicial = null, busquedaProp = '';
 
@@ -70,7 +70,9 @@ window.TABS.misContactos = {
 
     // Buscadores con lupa (Google: re-renderiza; propios: oculta filas in situ).
     cont.querySelector('#misBuscador').appendChild(
-      cajaBusqueda('Buscar por nombre, alias, correo, teléfono, puesto o etiqueta…', function(v){ busquedaMis = v; pintarTabla(); }));
+      cajaBusqueda('Buscar por nombre, alias, correo, teléfono, puesto o etiqueta…', function(v){
+        busquedaMis = v; clearTimeout(tBusq); tBusq = setTimeout(pintarTabla, 180);   // sin repintar en cada tecla
+      }));
     cont.querySelector('#propBuscador').appendChild(
       cajaBusqueda('Buscar por nombre, alias, correo, teléfono, puesto o etiqueta…', function(v){ busquedaProp = v; aplicarBusquedaProp(); }));
     function aplicarBusquedaProp(){
@@ -94,7 +96,6 @@ window.TABS.misContactos = {
         telefono:c.telefono||'', puesto:c.puesto||'', grupos:(c.grupos||[]).slice() };
     }
     function snap(r){ return { nombre:r.nombre, apellidos:r.apellidos, alias:r.alias, email:r.email, telefono:r.telefono, puesto:r.puesto, grupos:(r.grupos||[]).slice() }; }
-    function filaDe(id){ return MIS.filter(function(x){ return x.id===id; })[0]; }
     function igualesGrupos(a,b){
       var A=(a||[]).map(function(x){return x.toLowerCase();}).sort(), B=(b||[]).map(function(x){return x.toLowerCase();}).sort();
       return A.join('|')===B.join('|');
@@ -143,6 +144,7 @@ window.TABS.misContactos = {
 
     function celda(r,k){ return '<td><input data-k="'+k+'" title="'+esc(r[k]||'')+'" value="'+esc(r[k]||'')+'"></td>'; }
     function pintarTabla(){
+      limpiarMenusFlotantes();
       var zona = cont.querySelector('#misZona');
       if(!cargado){ zona.innerHTML = '<p class="muted">Pulsa «Traer mis contactos» para cargarlos.</p>'; return; }
       if(!MIS.length){ zona.innerHTML = '<p class="muted">No tienes contactos.</p>'; return; }
@@ -159,8 +161,9 @@ window.TABS.misContactos = {
             '<td class="act"><button class="btn danger sm icononly bdel" title="Eliminar">'+icon('borrar')+'</button></td>'+
           '</tr>';
         }).join('')+'</tbody></table></div>';
+      var porId = {}; filtradas.forEach(function(x){ porId[x.id] = x; });
       Array.prototype.forEach.call(zona.querySelectorAll('tbody tr'), function(tr){
-        var r = filaDe(tr.getAttribute('data-id')); if(!r) return;
+        var r = porId[tr.getAttribute('data-id')]; if(!r) return;
         Array.prototype.forEach.call(tr.querySelectorAll('input[data-k]'), function(inp){
           var k = inp.getAttribute('data-k');
           if(k==='puesto') armarChipInput(inp);
@@ -173,7 +176,14 @@ window.TABS.misContactos = {
     }
 
     cont.querySelector('#bTraer').onclick = function(){
-      correr(this, sMis, 'Cargando tus contactos…',
+      var btn = this, g = cambiosGoogle();
+      if(g.editados.length || g.eliminados.length){
+        modalConfirmar({ titulo:'Descartar cambios', icono:'alerta', peligro:true, aceptar:'Descartar y traer',
+          mensaje:'Tienes cambios sin guardar en tus contactos de Google. Si vuelves a traerlos se perderán.\n\n¿Continuar?',
+          onAceptar: traer });
+      } else traer();
+      function traer(){
+      correr(btn, sMis, 'Cargando tus contactos…',
         function(r){ r.getMisContactos(); },
         function(lista, st){
           MIS = (lista||[]).map(norm);
@@ -182,6 +192,7 @@ window.TABS.misContactos = {
           pintarFiltro(); pintarTabla(); revisar();
           setStatus(st, (lista||[]).length+' contactos. Edita o elimina y pulsa «Guardar cambios».', 'ok');
         });
+      }
     };
 
     cont.querySelector('#bCSVmis').onclick = function(){
@@ -198,7 +209,6 @@ window.TABS.misContactos = {
     if(!tb.children.length) filaPropio(tb, {}, revisar, sugerenciasEtq);
     habilitarPegado(tb, function(t,o){ filaPropio(t, o, revisar, sugerenciasEtq); });
     tb.addEventListener('input', revisar);
-    tb.addEventListener('paste', function(){ setTimeout(revisar, 0); });
     propiosInicial = JSON.stringify(leerPropios(tb));
     aplicarZebra(tb);   // rayado inicial de la tabla de propios
 
@@ -232,7 +242,7 @@ window.TABS.misContactos = {
             .withSuccessHandler(function(lista){
               if(tb.children.length===1){ var v=leerPropios(tb); if(!v.length) tb.innerHTML=''; }
               (lista||[]).forEach(function(c){ filaPropio(tb, c, revisar, sugerenciasEtq); });
-              revisar(); ctx.cerrar();
+              revisar(); aplicarBusquedaProp(); ctx.cerrar();
               setStatus(sPropios, 'Añadidas '+(lista||[]).length+' filas. Revisa y pulsa «Guardar cambios».', 'ok');
             })
             .withFailureHandler(function(e){ ctx.btn.disabled=false; setStatus(ctx.st, mensajeError(e), 'err'); })
@@ -285,10 +295,11 @@ window.TABS.misContactos = {
       }
 
       if(prop){
+        var enviados = leerPropios(tb), snap = JSON.stringify(enviados);   // lo guardado es lo enviado
         google.script.run
-          .withSuccessHandler(function(){ propiosInicial = JSON.stringify(leerPropios(tb)); setStatus(sPropios, 'Contactos propios guardados.', 'ok'); guardarGoogle(); })
+          .withSuccessHandler(function(){ propiosInicial = snap; setStatus(sPropios, 'Contactos propios guardados.', 'ok'); guardarGoogle(); })
           .withFailureHandler(function(e){ setStatus(sPropios, mensajeError(e), 'err'); btn.disabled=false; revisar(); })
-          .guardarPropios(leerPropios(tb));
+          .guardarPropios(enviados);
       } else {
         guardarGoogle();
       }
@@ -319,9 +330,7 @@ function filaPropio(tb, c, onChange, sugerencias){
     '<td class="puesto-cell"><input data-k="puesto" class="chipinput" size="'+Math.max(3,pv.length)+'" style="--h:'+(pv?hue(pv):186)+'" value="'+esc(pv)+'"></td>'+
     '<td class="etqs"></td>'+
     '<td class="act"><button class="btn danger sm icononly" title="Quitar fila">'+icon('borrar')+'</button></td>';
-  var puestoInp = tr.querySelector('input[data-k="puesto"]');
-  armarChipInput(puestoInp);
-  puestoInp.addEventListener('input', function(){ if(onChange) onChange(); });
+  armarChipInput(tr.querySelector('input[data-k="puesto"]'));   // su «input» ya lo recoge el tbody
   tr.querySelector('.act button').onclick = function(){ tr.remove(); if(onChange) onChange(); };
   chipCellEditor(tr.querySelector('.etqs'), tr._grupos, onChange, sugerencias ? { sugerencias: sugerencias } : null);
   tb.appendChild(tr);

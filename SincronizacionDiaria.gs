@@ -32,7 +32,10 @@ function invalidarCacheDiaria_() {
  */
 function activarSincronizacionDiaria(opciones) {
   const email = correoUsuarioActual_();
-  if (opciones && opciones.incluirCentro && !esAdmin_(email) && !esMiembroClaustro_(email)) {
+  // Solo se guardan las opciones conocidas.
+  opciones = opciones || {};
+  opciones = { incluirCentro: !!opciones.incluirCentro, incluirPropios: !!opciones.incluirPropios };
+  if (opciones.incluirCentro && !puedeSincronizarCentro_(email)) {
     throw new Error('NO_MIEMBRO');
   }
 
@@ -67,8 +70,8 @@ function desactivarSincronizacionDiaria_() {
 }
 
 /**
- * Función que dispara el trigger. Comprueba pertenencia al grupo; si el usuario
- * ya no pertenece, avisa por correo y se desactiva (como en el proyecto de hoja).
+ * Función que dispara el trigger. Comprueba que sigue perteneciendo al centro
+ * (claustro o alumnado); si ya no pertenece, avisa por correo y se desactiva (como en el proyecto de hoja).
  */
 function ejecutarSincronizacionDiaria() {
   try {
@@ -76,9 +79,13 @@ function ejecutarSincronizacionDiaria() {
     const opciones = raw ? JSON.parse(raw) : { incluirCentro: true, incluirPropios: true };
 
     const email = correoUsuarioActual_();
-    if (opciones.incluirCentro && !esAdmin_(email) && !esMiembroClaustro_(email)) {
-      notificarBajaDelGrupo_();
-      desactivarSincronizacionDiaria_();
+    if (opciones.incluirCentro && !puedeSincronizarCentro_(email)) {
+      // Solo se da de baja si la comprobación es fiable (la lista del claustro se
+      // ha leído y no hubo un fallo transitorio consultando el grupo).
+      if (!MEMO_.errorGrupo && leerContactosCentroStore_().length) {
+        notificarBajaDelGrupo_();
+        desactivarSincronizacionDiaria_();
+      }
       return;
     }
     sincronizar(opciones);
@@ -93,7 +100,7 @@ function notificarBajaDelGrupo_() {
   const centro = nombreCentro_();
   const html =
     '<p>¡Hola!</p>' +
-    '<p>Hemos detectado que ya no formas parte del grupo del profesorado del <strong>' +
+    '<p>Hemos detectado que ya no formas parte del profesorado ni del alumnado del <strong>' +
     centro + '</strong>, por lo que hemos detenido la sincronización automática de contactos.</p>' +
     '<p>Si crees que es un error o has cambiado de centro, ponte en contacto con tu administrador.</p>' +
     '<p>Gracias por usar <strong>' + PARAMS.nombreApp + '</strong>.</p>';

@@ -3,7 +3,7 @@
 <head>
   <base target="_top">
   <meta charset="utf-8">
-  <?!= include('Estilos') ?>
+  <?!= include_('Estilos') ?>
 </head>
 <body>
   <div id="root">
@@ -19,12 +19,13 @@
     </div>
   </div>
 
-  <?!= include('Iconos') ?>
-  <?!= include('MisContactos') ?>
+  <?!= include_('Iconos') ?>
+  <?!= include_('MisContactos') ?>
+  <?!= include_('PestanaAlumnado') ?>
   <? if (esAdmin) { ?>
-    <?!= include('Configuracion') ?>
-    <?!= include('ContactosCentro') ?>
+    <?!= include_('Configuracion') ?>
+    <?!= include_('ContactosCentro') ?>
   <? } ?>
-  <?!= include('App') ?>
+  <?!= include_('App') ?>
 </body>
 </html>

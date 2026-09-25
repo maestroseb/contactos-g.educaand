@@ -5,7 +5,8 @@
  *  - Sin configurar + eres el admin  -> asistente de configuración.
  *  - Sin configurar + no eres admin  -> página de "en preparación".
  *  - Configurado + admin             -> panel de administración.
- *  - Configurado + miembro claustro  -> vista de profesorado.
+ *  - Configurado + miembro claustro  -> vista de profesorado (y Alumnado si es tutor).
+ *  - Configurado + alumno de un curso -> vista de alumnado (solo su clase).
  *  - Configurado + ajeno             -> acceso denegado.
  */
 
@@ -19,7 +20,7 @@ function doGet(e) {
     return paginaDenegado_(email, 'La aplicación de este centro todavía se está configurando. Vuelve a intentarlo más tarde.');
   }
 
-  if (!esAdmin && !esMiembroClaustro_(email)) {
+  if (!esAdmin && !esMiembroClaustro_(email) && !esAlumno_(email)) {
     return paginaDenegado_(email, null);
   }
   return paginaApp_(email, esAdmin);
@@ -55,7 +56,7 @@ function ponerFavicon_(out) {
 }
 
 /** Permite incluir un archivo HTML dentro de otro. */
-function include(nombre) {
+function include_(nombre) {
   return HtmlService.createHtmlOutputFromFile(nombre).getContent();
 }
 
@@ -68,21 +69,26 @@ function getEstadoInicial() {
   const email = correoUsuarioActual_();
   const cfg = getConfig_() || {};   // una sola lectura (cacheada)
   const perfil = perfilUsuarioActual_(email);
+  const rol = rolDe_(email);
+  const alumno = rol === 'alumno';
+  // Sin rol (ajeno al centro o centro sin configurar): solo lo imprescindible.
+  if (!rol) return { email: email, rol: '', esAdmin: false, configurado: !!cfg.completo, nombreApp: PARAMS.nombreApp };
   return {
     email: email,
     nombreUsuario: perfil.nombre,
     fotoUsuario: perfil.foto,
-    esAdmin: esAdmin_(email),
+    esAdmin: rol === 'admin',
+    rol: rol,
+    esTutor: !alumno && esTutor_(email),
+    cursosSync: alumno ? [] : cursosElegibles_(email),
     configurado: !!cfg.completo,
     nombreApp: PARAMS.nombreApp,
-    icono: PARAMS.icono,
-    version: PARAMS.version,
     nombreCentro: (cfg.nombreCentro ? String(cfg.nombreCentro).trim() : ''),
-    gruposCentro: gruposDelCentro_(),
+    gruposCentro: alumno ? gruposDe_(contactosDeClase_(email)) : gruposDelCentro_(),
     contactosPropios: leerContactosPropios_(),
     diariaActiva: tieneSincronizacionDiaria(),
-    etiquetasSugeridas: etiquetasSugeridasDe_(cfg.etiquetas),
-    etiquetasCats: cfg.etiquetas || {}
+    etiquetasSugeridas: alumno ? [] : etiquetasSugeridasDe_(cfg.etiquetas),
+    etiquetasCats: alumno ? {} : (cfg.etiquetas || {})
   };
 }
 
@@ -118,15 +124,19 @@ function getEstadoConfig() {
 /** Guarda la lista de administradores adicionales (solo un admin puede). */
 function guardarAdmins(lista) {
   exigirAdmin_();
-  const guardados = setAdminsExtra_(lista);
-  return { owner: getAdminEmail_(), extra: guardados };
+  return conBloqueo_(function () {
+    const guardados = setAdminsExtra_(lista);
+    return { owner: getAdminEmail_(), extra: guardados };
+  });
 }
 
 /** Traspasa el rol de principal (solo el principal actual puede hacerlo). */
 function hacerPrincipal(email) {
   exigirAdminPrincipal_();
-  traspasarAdminPrincipal_(email);
-  return { owner: getAdminEmail_(), extra: getAdminsExtra_() };
+  return conBloqueo_(function () {
+    traspasarAdminPrincipal_(email);
+    return { owner: getAdminEmail_(), extra: getAdminsExtra_() };
+  });
 }
 
 /** Verifica un código de centro contra el catálogo. */
@@ -138,22 +148,25 @@ function verificarCentro(codigo) {
 /** Guarda la configuración del centro (marca el asistente como completado). */
 function guardarConfiguracion(cfg) {
   exigirAdmin_();
-  cfg = cfg || {};
-  const actual = getConfig_() || {};
-  const nuevo = {
-    codigoCentro: cfg.codigoCentro || actual.codigoCentro || '',
-    nombreCentro: cfg.nombreCentro || actual.nombreCentro || '',
-    especialidades: cfg.especialidades || actual.especialidades || DEFAULTS.especialidades,
-    etiquetas: cfg.etiquetas || actual.etiquetas || DEFAULTS.etiquetas,
-    // Acceso: por defecto, quien esté en la lista de contactos del claustro.
-    usarLista: true,
-    // Se mantiene el grupo de Google si alguna versión anterior lo configuró.
-    usarGrupo: !!actual.grupoProfesorado,
-    grupoProfesorado: actual.grupoProfesorado || '',
-    completo: true
-  };
-  setConfig_(nuevo);
-  return nuevo;
+  return conBloqueo_(function () {
+    cfg = cfg || {};
+    const actual = getConfig_() || {};
+    const nuevo = {
+      codigoCentro: cfg.codigoCentro || actual.codigoCentro || '',
+      nombreCentro: cfg.nombreCentro || actual.nombreCentro || '',
+      especialidades: cfg.especialidades || actual.especialidades || DEFAULTS.especialidades,
+      etiquetas: cfg.etiquetas || actual.etiquetas || DEFAULTS.etiquetas,
+      // Acceso: por defecto, quien esté en la lista de contactos del claustro.
+      usarLista: true,
+      // Se mantiene el grupo de Google si alguna versión anterior lo configuró.
+      usarGrupo: !!actual.grupoProfesorado,
+      grupoProfesorado: actual.grupoProfesorado || '',
+      // Renombrar una etiqueta desde el claustro no da por completado el asistente.
+      completo: !!(actual.completo || !cfg.soloEtiquetas)
+    };
+    setConfig_(nuevo);
+    return nuevo;
+  });
 }
 
 /* ------------------------- Contactos del centro (admin) ------------------------- */
@@ -168,12 +181,32 @@ function adminLeerContactos() {
  *  con la configuración (para que aparezcan como sugerencias en Configuración). */
 function adminGuardarContactos(lista) {
   exigirAdmin_();
-  lista = lista || [];
-  const previa = leerContactosCentroStore_();     // para detectar quién se ha quitado
-  const n = guardarContactosCentroStore_(lista);
-  registrarBajas_(previa, lista);                 // anota bajas (se les retiran etiquetas al sincronizar)
-  const sync = sincronizarConfigDesdeContactos_(lista);
-  return { n: n, cambioCfg: sync.cambio, etiquetas: sync.etiquetas, especialidades: sync.especialidades };
+  lista = limpiarClaustro_(lista);
+  return conBloqueo_(function () {
+    // Lectura sin caché (dentro del bloqueo) para detectar bien quién se ha quitado.
+    const previa = leerTrozos_(PROP_CONTACTOS_PREFIJO, PROP_CONTACTOS_NUM, CACHE_CONTACTOS, null, true);
+    const n = guardarContactosCentroStore_(lista);
+    registrarBajas_(previa, lista);                 // anota bajas (se les retiran etiquetas al sincronizar)
+    const sync = sincronizarConfigDesdeContactos_(lista);
+    return { n: n, cambioCfg: sync.cambio, etiquetas: sync.etiquetas, especialidades: sync.especialidades };
+  });
+}
+
+/** Normaliza y limita la lista del claustro (tamaños y campos conocidos). */
+function limpiarClaustro_(lista) {
+  const t = (v, max) => String(v == null ? '' : v).trim().slice(0, max || 100);
+  const out = (Array.isArray(lista) ? lista : []).slice(0, 600).map(c => {
+    c = c || {};
+    const o = {
+      nombre: t(c.nombre), apellidos: t(c.apellidos), alias: t(c.alias), tipoEmail: t(c.tipoEmail, 20),
+      email: t(c.email).toLowerCase(), telefono: t(c.telefono, 30), puesto: t(c.puesto),
+      grupos: (Array.isArray(c.grupos) ? c.grupos : []).slice(0, 25).map(g => t(g, 60)).filter(Boolean)
+    };
+    if (c.pausado) o.pausado = true;
+    return o;
+  }).filter(c => c.email || c.nombre || c.apellidos);
+  if (bytes_(JSON.stringify(out)) > 200 * 1024) throw new Error('ALMACEN_LLENO');
+  return out;
 }
 
 /** Normaliza el objeto de categorías de etiquetas a { grupo, departamentos, cargos, otros }. */
@@ -228,6 +261,7 @@ function adminImportarPegado(texto) {
 
 /** Igual que adminImportarPegado pero para los contactos propios (cualquier usuario). */
 function parsearPegado(texto) {
+  if (String(texto || '').length > 300000) throw new Error('El texto pegado es demasiado grande.');
   return parsearClaustroPegado_(texto);
 }
 
@@ -236,8 +270,9 @@ function parsearPegado(texto) {
 function sincronizarAhora(opciones) { return sincronizar(opciones); }
 
 function guardarPropios(lista) {
-  guardarContactosPropios_(lista || []);
-  return leerContactosPropios_();
+  lista = (Array.isArray(lista) ? lista : []).slice(0, 2000);
+  guardarContactosPropios_(lista);
+  return lista;
 }
 
 /* ------------------------------ Perfil ------------------------------ */

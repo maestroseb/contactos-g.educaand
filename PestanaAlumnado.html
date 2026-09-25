@@ -1,0 +1,434 @@
+<script>
+/** Pestaña ALUMNADO (súper admin y profesorado).
+ *  - Súper admin: ve y audita todos los cursos, los filtra, crea/borra y asigna tutor/a.
+ *  - Docente: crea sus cursos (queda como tutor/a) y gestiona solo los suyos.
+ *  El nombre del curso es la etiqueta del grupo. El alumnado sincroniza a sus
+ *  compañeros, su tutor/a y el profesorado marcado. */
+window.TABS = window.TABS || {};
+window.TABS.alumnado = {
+  orden: 4, label: 'Alumnado', icono: 'curso',
+  titulo: 'Alumnado', sub: 'Cursos, tutorías y profesorado de cada clase',
+  visible: function(estado){ return estado.esAdmin || estado.rol === 'profesor'; },
+  render: function (cont, estado) {
+    var DATA = null, filtro = '';
+
+    cont.innerHTML =
+      '<div class="card">'+
+        '<div class="card-head">'+
+          '<h2>'+icon('curso')+'Cursos</h2>'+
+          '<div class="row" id="aluAcc"></div>'+
+        '</div>'+
+        '<p class="desc" id="aluDesc"></p>'+
+        '<p class="status" id="aluSt"></p>'+
+      '</div>'+
+      '<div id="aluCursos"><p class="muted">Cargando…</p></div>'+
+      '<button class="btn primary floatsave" id="aluSave" hidden>'+icon('guardar')+'Guardar cambios</button>';
+    var st = cont.querySelector('#aluSt');
+
+    /* ---- Guardado unificado (botón flotante, como en las otras pestañas) ---- */
+    function tarjetasSucias(){
+      return Array.prototype.filter.call(cont.querySelectorAll('#aluCursos .card'), function(c){ return c._sucio && c._sucio(); });
+    }
+    function revisarGuardar(){ var b = cont.querySelector('#aluSave'); if(b) b.hidden = !tarjetasSucias().length; }
+    cont._sucio = function(){ return tarjetasSucias().length > 0; };   // no perder cambios al refrescar la pestaña
+    cont.querySelector('#aluSave').onclick = function(){
+      var btn = this, cola = tarjetasSucias();
+      if(!cola.length) return;
+      btn.disabled = true;
+      (function siguiente(){
+        var c = cola.shift();
+        if(!c){ btn.disabled = false; revisarGuardar(); return; }
+        c._guardar(function(){ siguiente(); });
+      })();
+    };
+
+    function cargar(){
+      setStatus(st, 'Cargando cursos…', 'busy');
+      google.script.run
+        .withSuccessHandler(function(d){ DATA = d; setStatus(st, '', null); pintarCabecera(); pintar(); })
+        .withFailureHandler(function(e){ setStatus(st, mensajeError(e), 'err'); })
+        .getAlumnado();
+    }
+
+    /** Actualiza la lista de grupos del menú «Sincronizar» (viene en la respuesta del servidor). */
+    function refrescarPop(lista){ if(window.pintarCursosPop && lista) window.pintarCursosPop(lista); }
+
+    function nombreDe(email){
+      var c = (DATA.claustro||[]).filter(function(x){ return x.email===email; })[0];
+      if(!c) return email || '';
+      var n = [c.nombre, c.apellidos].filter(Boolean).join(' ');
+      return n ? n+' ('+email+')' : email;
+    }
+
+    function pintarCabecera(){
+      cont.querySelector('#aluDesc').innerHTML = DATA.esAdmin
+        ? 'Ves todos los cursos del centro. Puedes crearlos, revisar sus nombres y asignar o cambiar su <b>tutor/a</b>. Cada docente también puede crear los suyos. El nombre del curso es la <b>etiqueta</b> de ese grupo. El alumnado, al entrar en la web, sincroniza solo a sus compañeros, a su tutor/a y al profesorado marcado (etiqueta «Profesorado &lt;curso&gt;»).'
+        : 'Crea tus cursos (quedas como tutor/a), añade su alumnado y marca el profesorado que da clase en ellos. El nombre del curso es la <b>etiqueta</b> de ese grupo. Tu alumnado, al entrar en la web, sincronizará solo a sus compañeros, a ti y a ese profesorado. Para recibir tú los contactos de un grupo, márcalo en el menú de «Sincronizar».';
+      if(DATA.uso){
+        var kb = Math.round(DATA.uso.bytes/1024), lim = Math.round(DATA.uso.limite/1024), pct = Math.round(DATA.uso.bytes/DATA.uso.limite*100);
+        cont.querySelector('#aluDesc').innerHTML += '<br><span class="muted">Espacio usado del almacén: '+kb+' KB de '+lim+' KB ('+pct+' %).</span>'+
+          (pct >= 80 ? ' <b>Queda poco espacio.</b>' : '');
+      }
+      var acc = cont.querySelector('#aluAcc');
+      var cursos = DATA.cursos || [];
+      var html = '';
+      if(DATA.esAdmin || cursos.length > 1){
+        html += '<select id="aluFiltro" style="width:auto;min-width:200px;padding:7px 10px">'+
+          '<option value="">Todos los cursos ('+cursos.length+')</option>'+
+          cursos.map(function(c){ return '<option value="'+esc(c.id)+'"'+(filtro===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+
+        '</select>';
+      }
+      html += '<button class="btn sm primary" id="aluNuevo">'+icon('add')+'Nuevo curso</button>';
+      acc.innerHTML = html;
+      var sel = acc.querySelector('#aluFiltro');
+      if(sel) sel.onchange = function(){ filtro = sel.value; aplicarFiltro(); };
+      var bn = acc.querySelector('#aluNuevo');
+      if(bn) bn.onclick = function(){
+        var zona = cont.querySelector('#aluCursos');
+        if(!zona.querySelector('.card')) zona.innerHTML = '';
+        var card = tarjeta({ id:null, nombre:'', tutor:'', profesores:[], alumnos:[] });
+        zona.insertBefore(card, zona.firstChild);
+        var inp = card.querySelector('.cNombre'); if(inp) inp.focus();
+      };
+    }
+
+    /** Pinta todas las tarjetas una vez; el filtro solo las oculta (así no se
+     *  pierden cambios sin guardar al cambiar de curso en el filtro). */
+    function pintar(){
+      var zona = cont.querySelector('#aluCursos');
+      zona.innerHTML = '';
+      (DATA.cursos||[]).forEach(function(c){ zona.appendChild(tarjeta(c)); });
+      aplicarFiltro();
+    }
+    function aplicarFiltro(){
+      var zona = cont.querySelector('#aluCursos');
+      var cards = zona.querySelectorAll('.card[data-curso]');
+      if(!cards.length){
+        zona.innerHTML = '<div class="card"><p class="muted">'+(DATA.esAdmin?'Aún no hay cursos.':'Aún no tienes cursos.')+' Pulsa «Nuevo curso» para crear el primero.</p></div>';
+        return;
+      }
+      Array.prototype.forEach.call(cards, function(cd){
+        var id = cd.getAttribute('data-curso');
+        cd.hidden = !!(filtro && id && id !== filtro);   // las nuevas sin guardar siempre visibles
+      });
+    }
+
+    /** Tarjeta editable de un curso. */
+    function tarjeta(curso){
+      var m = JSON.parse(JSON.stringify(curso));
+      if(!m.id && !DATA.esAdmin) m.tutor = DATA.yo;   // el docente que lo crea queda como tutor/a
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.setAttribute('data-curso', m.id || '');
+      var admin = DATA.esAdmin;
+      var opcionesTutor = '<option value="">— Sin tutor/a —</option>'+
+        (DATA.claustro||[]).map(function(p){
+          return '<option value="'+esc(p.email)+'"'+(p.email===m.tutor?' selected':'')+'>'+esc(nombreDe(p.email))+'</option>';
+        }).join('');
+
+      card.innerHTML =
+        '<div class="card-head">'+
+          '<h2>'+icon('curso')+'<span class="cTit">'+esc(m.nombre||'Nuevo curso')+'</span></h2>'+
+          '<div class="row">'+
+            '<button class="btn sm cClass">'+icon('curso')+'Desde Classroom…</button>'+
+            '<button class="btn sm cImp">'+icon('importar')+'Importar alumnado…</button>'+
+            '<button class="btn sm cCSV">'+icon('descargar')+'Descargar CSV</button>'+
+            '<button class="btn danger sm icononly cDel" title="Eliminar curso">'+icon('borrar')+'</button>'+
+          '</div>'+
+        '</div>'+
+        (admin
+          ? '<div class="row" style="gap:14px;align-items:flex-end;margin-bottom:6px">'+
+              '<label class="fld" style="flex:1;min-width:160px"><span>Curso (etiqueta del grupo)</span><input class="cNombre" placeholder="p. ej. 3º ESO A" value="'+esc(m.nombre)+'"></label>'+
+              '<label class="fld" style="flex:2;min-width:220px"><span>Tutor/a</span><select class="cTutor">'+opcionesTutor+'</select></label>'+
+            '</div>'
+          : '<div class="row" style="gap:14px;align-items:flex-end;margin-bottom:6px">'+
+              '<label class="fld" style="flex:1;min-width:160px"><span>Curso (etiqueta del grupo)</span><input class="cNombre" placeholder="p. ej. 3º ESO A" value="'+esc(m.nombre)+'"></label>'+
+              '<p class="desc" style="flex:2;min-width:220px"><b>Tutor/a:</b> '+esc(nombreDe(m.tutor))+'</p>'+
+            '</div>')+
+        '<h3 style="margin:6px 0 8px;font-size:14px">Profesorado del curso <span class="muted cNProf"></span></h3>'+
+        '<p class="desc">Marca abajo el profesorado que da clase en este curso: aparecerá arriba, destacado (quítalo con «×»). El tutor/a se incluye siempre.</p>'+
+        '<div class="chips prof-sel cProfSel"></div>'+
+        '<div class="cProfBusca"></div>'+
+        '<div class="chips cProf" style="max-height:190px;overflow-y:auto;margin:8px 0 16px"></div>'+
+        '<h3 style="margin:6px 0 8px;font-size:14px">Alumnado <span class="muted cNAlu"></span></h3>'+
+        '<p class="desc">Con el <b>alias</b> (p. ej. el nombre en español de quien figura con otro nombre en Classroom) también aparecerá al buscar o autocompletar su correo.</p>'+
+        '<div class="tablewrap"><table class="rejilla mis">'+
+          '<colgroup><col style="width:5%"><col style="width:18%"><col style="width:25%"><col style="width:29%"><col style="width:17%"><col style="width:6%"></colgroup>'+
+          '<thead><tr><th class="num-col">Nº</th><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th title="Otro nombre con el que buscarlo (p. ej. su nombre en español). Se guarda como apodo del contacto.">Alias</th><th></th></tr></thead><tbody></tbody></table></div>'+
+        '<div class="row" style="margin-top:14px">'+
+          '<button class="btn sm cAdd">'+icon('add')+'Añadir alumno/a</button>'+
+        '</div>'+
+        '<p class="status cSt"></p>';
+
+      var tb = card.querySelector('tbody'), cst = card.querySelector('.cSt');
+      var busqProf = '';
+
+      function tutorActual(){ var s = card.querySelector('.cTutor'); return s ? s.value : m.tutor; }
+
+      /** Profesorado del curso: arriba, fijos y destacados, el tutor/a y los
+       *  marcados (con «×» para quitarlos); debajo, el resto del claustro para
+       *  añadir (con buscador). */
+      function pintarProfes(){
+        var tutor = tutorActual();
+        var porEmail = {};
+        (DATA.claustro||[]).forEach(function(p){ porEmail[p.email] = p; });
+        function txtDe(p){ return [p.nombre, p.apellidos].filter(Boolean).join(' ') || p.email; }
+        function chipSel(email, esTutor){
+          var p = porEmail[email] || { email: email };
+          return '<span class="chip-prof'+(esTutor?' tutor':'')+'" title="'+esc(email)+'">'+icon(esTutor?'curso':'ok')+
+            esc(txtDe(p))+(esTutor?' <small>Tutor/a</small>':(p.puesto?' <small>'+esc(p.puesto)+'</small>':''))+
+            (esTutor?'':'<button type="button" class="x" data-quitar="'+esc(email)+'" title="Quitar">'+cerrarSvg()+'</button>')+'</span>';
+        }
+        var marcados = m.profesores.filter(function(e){ return e !== tutor; })
+          .sort(function(a, b){ return txtDe(porEmail[a]||{email:a}).localeCompare(txtDe(porEmail[b]||{email:b}), 'es'); });
+        var sel = card.querySelector('.cProfSel');
+        sel.innerHTML = (tutor ? chipSel(tutor, true) : '') + marcados.map(function(e){ return chipSel(e, false); }).join('') ||
+          '<span class="muted">Aún no has marcado profesorado.</span>';
+        Array.prototype.forEach.call(sel.querySelectorAll('[data-quitar]'), function(b){
+          b.onclick = function(){ var i = m.profesores.indexOf(b.getAttribute('data-quitar')); if(i !== -1) m.profesores.splice(i, 1); pintarProfes(); };
+        });
+
+        var box = card.querySelector('.cProf');
+        var lista = (DATA.claustro||[]).filter(function(p){ return p.email !== tutor && m.profesores.indexOf(p.email) === -1; });
+        box.innerHTML = lista.length ? lista.map(function(p){
+          var vis = coincideBusqueda([txtDe(p), p.email, p.puesto].join(' '), busqProf);
+          return '<label'+(vis?'':' hidden')+' title="'+esc(p.email)+'"><input type="checkbox" value="'+esc(p.email)+'"> '+
+            esc(txtDe(p))+(p.puesto?' <span class="muted">· '+esc(p.puesto)+'</span>':'')+'</label>';
+        }).join('') : '<p class="muted">'+((DATA.claustro||[]).length ? 'Todo el claustro está marcado.' : 'El claustro está vacío.')+'</p>';
+        Array.prototype.forEach.call(box.querySelectorAll('input[type=checkbox]'), function(ch){
+          ch.onchange = function(){ if(m.profesores.indexOf(ch.value) === -1) m.profesores.push(ch.value); pintarProfes(); };
+        });
+        contar();
+      }
+
+
+      function fila(a){
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td class="num-col"></td>'+
+          '<td><input data-k="nombre" value="'+esc(a.nombre||'')+'"></td>'+
+          '<td><input data-k="apellidos" value="'+esc(a.apellidos||'')+'"></td>'+
+          '<td><input data-k="email" value="'+esc(a.email||'')+'"></td>'+
+          '<td><input data-k="alias" placeholder="Otro nombre…" value="'+esc(a.alias||'')+'"></td>'+
+          '<td class="act"><button class="btn danger sm icononly" title="Quitar">'+icon('borrar')+'</button></td>';
+        tr.querySelector('.act button').onclick = function(){ tr.remove(); aplicarZebra(tb); contar(); };
+        tr.querySelector('input[data-k="apellidos"]').addEventListener('change', function(){ ordenarFilas(); aplicarZebra(tb); contar(); });
+        tb.appendChild(tr);
+      }
+      function leerAlumnos(){
+        return Array.prototype.map.call(tb.querySelectorAll('tr'), function(tr){
+          var o = {};
+          Array.prototype.forEach.call(tr.querySelectorAll('input[data-k]'), function(i){ o[i.getAttribute('data-k')] = i.value.trim(); });
+          return o;
+        }).filter(function(o){ return o.email || o.nombre || o.apellidos; });
+      }
+      function contar(){
+        revisarGuardar();
+        var tutor = tutorActual();
+        card.querySelector('.cNProf').textContent = '('+(m.profesores.filter(function(e){ return e!==tutor; }).length + (tutor?1:0))+')';
+        card.querySelector('.cNAlu').textContent = '('+leerAlumnos().length+')';
+        // Numeración de las filas (a la izquierda), según el orden visible.
+        Array.prototype.forEach.call(tb.querySelectorAll('tr'), function(tr, i){
+          var c = tr.querySelector('.num-col'); if(c) c.textContent = i + 1;
+        });
+      }
+
+      (m.alumnos||[]).forEach(fila);
+      if(!tb.children.length) fila({});
+      ordenarFilas();   // también los ya guardados (por si venían sin ordenar)
+      habilitarPegado(tb, function(t, o){ fila(o); });
+      tb.addEventListener('input', contar);
+      aplicarZebra(tb);
+
+      card.querySelector('.cProfBusca').appendChild(cajaBusqueda('Buscar profesorado…', function(v){ busqProf = v; pintarProfes(); }));
+      var selT = card.querySelector('.cTutor');
+      if(selT) selT.onchange = pintarProfes;
+      var inpN = card.querySelector('.cNombre');
+      if(inpN) inpN.oninput = function(){ card.querySelector('.cTit').textContent = inpN.value || 'Nuevo curso'; revisarGuardar(); };
+      pintarProfes();
+
+      card.querySelector('.cAdd').onclick = function(){ fila({}); aplicarZebra(tb); };
+
+      /** Añade filas sin repetir correos ya presentes. Devuelve cuántas añadió. */
+      function anadirAlumnos(lista){
+        var ya = {}; leerAlumnos().forEach(function(a){ if(a.email) ya[a.email.toLowerCase()] = true; });
+        if(!leerAlumnos().length) tb.innerHTML = '';
+        var n = 0;
+        (lista||[]).forEach(function(c){
+          var e = String(c.email||'').toLowerCase();
+          if(e && ya[e]) return;
+          if(e) ya[e] = true;
+          fila({ nombre:c.nombre, apellidos:c.apellidos, email:e, alias:c.alias||'' }); n++;
+        });
+        ordenarFilas();
+        aplicarZebra(tb); contar();
+        return n;
+      }
+
+      /** Ordena la tabla alfabéticamente por apellidos y, a igualdad, por nombre
+       *  (sin distinguir acentos ni mayúsculas). Las filas vacías van al final. */
+      function ordenarFilas(){
+        function val(tr, k){ var i = tr.querySelector('input[data-k="'+k+'"]'); return i ? i.value.trim() : ''; }
+        var filas = Array.prototype.slice.call(tb.querySelectorAll('tr'));
+        filas.sort(function(a, b){
+          var aa = val(a,'apellidos'), ab = val(b,'apellidos');
+          if(!aa !== !ab) return aa ? -1 : 1;
+          return aa.localeCompare(ab, 'es', { sensitivity:'base' }) ||
+                 val(a,'nombre').localeCompare(val(b,'nombre'), 'es', { sensitivity:'base' });
+        });
+        filas.forEach(function(tr){ tb.appendChild(tr); });
+      }
+
+      card.querySelector('.cClass').onclick = function(){
+        modalClassroom(function(clase, lista){
+          var n = anadirAlumnos(lista);
+          if(inpN && !inpN.value.trim()){ inpN.value = clase.nombre; inpN.oninput(); }   // curso nuevo: toma el nombre de la clase
+          setStatus(cst, 'Añadidos '+n+' alumnos/as de «'+clase.nombre+'»'+(lista.length>n?' ('+(lista.length-n)+' ya estaban)':'')+'. Revisa y pulsa «Guardar curso».', 'ok');
+        });
+      };
+
+      card.querySelector('.cImp').onclick = function(){
+        modalPegar({
+          titulo: 'Importar alumnado',
+          desc: 'Sube un Excel o CSV (p. ej. el listado del alumnado de Séneca) o pega el listado. Se detectan nombre, apellidos y correo. Se añaden a la tabla; luego pulsa «Guardar curso».',
+          placeholder: 'Apellidos, Nombre\tcorreo@g.educaand.es',
+          aceptar: 'Añadir a la tabla',
+          onAceptar: function(texto, ctx){
+            if(!texto.trim()){ setStatus(ctx.st, 'Pega antes las filas.', 'err'); return; }
+            ctx.btn.disabled = true; setStatus(ctx.st, 'Procesando…', 'busy');
+            google.script.run
+              .withSuccessHandler(function(lista){
+                var n = anadirAlumnos(lista); ctx.cerrar();
+                setStatus(cst, 'Añadidas '+n+' filas. Revisa y pulsa «Guardar curso».', 'ok');
+              })
+              .withFailureHandler(function(e){ ctx.btn.disabled=false; setStatus(ctx.st, mensajeError(e), 'err'); })
+              .parsearPegado(texto);
+          }
+        });
+      };
+
+      card.querySelector('.cCSV').onclick = function(){
+        var al = leerAlumnos();
+        if(!al.length){ setStatus(cst, 'No hay alumnado que descargar.', 'err'); return; }
+        descargarCSV('alumnado-'+(m.nombre||'curso').replace(/[^\wÀ-ÿ-]+/g,'_')+'.csv',
+          [['Nombre','Apellidos','E-mail','Alias']].concat(al.map(function(a){ return [a.nombre, a.apellidos, a.email, a.alias||'']; })));
+      };
+
+      var bDel = card.querySelector('.cDel');
+      if(bDel) bDel.onclick = function(){
+        if(!m.id){ card.remove(); aplicarFiltro(); revisarGuardar(); return; }
+        modalConfirmar({ titulo:'Eliminar curso', icono:'borrar', peligro:true, aceptar:'Eliminar',
+          mensaje:'¿Eliminar el curso «'+m.nombre+'» con su alumnado?\n\nSu alumnado dejará de poder entrar en la web.',
+          onAceptar:function(){
+            correr(bDel, cst, 'Eliminando…', function(r){ r.eliminarCurso(m.id); }, function(res){
+              DATA.cursos = DATA.cursos.filter(function(c){ return c.id!==m.id; });
+              if(filtro===m.id) filtro = '';
+              pintarCabecera(); card.remove(); refrescarPop(res && res.cursosSync);
+              aplicarFiltro();
+            });
+          }});
+      };
+
+      /** Foto del estado editable (el orden de filas no cuenta como cambio). */
+      function foto(){
+        var tutor = tutorActual();
+        return JSON.stringify({
+          n: inpN ? inpN.value.trim() : m.nombre, t: tutor,
+          p: m.profesores.filter(function(e){ return e !== tutor; }).slice().sort(),
+          a: leerAlumnos().map(function(a){ return [a.email, a.nombre, a.apellidos, a.alias||''].join('|'); }).sort()
+        });
+      }
+      card._sucio = function(){ return foto() !== card._inicial; };
+
+      card._guardar = function(fin){
+        var datos = { id:m.id, nombre: inpN ? inpN.value.trim() : m.nombre, tutor: tutorActual(),
+          profesores: m.profesores.slice(), alumnos: leerAlumnos() };
+        var sinCorreo = datos.alumnos.filter(function(a){ return !a.email; }).length;
+        setStatus(cst, 'Guardando…', 'busy');
+        google.script.run.withFailureHandler(function(e){ setStatus(cst, mensajeError(e), 'err'); if(fin) fin(false); })
+          .withSuccessHandler(function(out){
+          var res = out.curso;
+          var nuevo = !m.id;
+          m = res;
+          card.setAttribute('data-curso', res.id);
+          var i = -1; DATA.cursos.forEach(function(c, k){ if(c.id===res.id) i = k; });
+          if(i === -1) DATA.cursos.push(res); else DATA.cursos[i] = res;
+          DATA.cursos.sort(function(a,b){ return String(a.nombre).localeCompare(String(b.nombre), 'es', { numeric:true }); });
+          refrescarPop(out.cursosSync);
+          if(nuevo) pintarCabecera();
+          else { var o = cont.querySelector('#aluFiltro option[value="'+res.id+'"]'); if(o) o.textContent = res.nombre; }
+          ordenarFilas(); aplicarZebra(tb);
+          card._inicial = foto(); contar();
+          setStatus(cst, 'Curso guardado: '+res.alumnos.length+' alumnos/as'+(sinCorreo?' ('+sinCorreo+' sin correo: no podrán sincronizar)':'')+'.', sinCorreo?'err':'ok');
+          if(fin) fin(true);
+        }).guardarCurso(datos);
+      };
+
+      card._inicial = foto();   // un curso nuevo cuenta como cambio en cuanto se escribe algo
+      return card;
+    }
+
+    cargar();
+  }
+};
+
+/** Clases de Classroom del docente (se piden una vez por sesión). */
+var CLASSROOM_CURSOS = null;
+
+/**
+ * Modal con un desplegable de las clases de Google Classroom del docente.
+ * onElegir(clase {id,nombre}, alumnos [{nombre,apellidos,email}]).
+ */
+function modalClassroom(onElegir){
+  var ov = document.createElement('div');
+  ov.className = 'modal-ov';
+  ov.innerHTML =
+    '<div class="modal" role="dialog" aria-modal="true">'+
+      '<div class="modal-head"><h3>'+icon('curso')+'Traer alumnado de Classroom</h3>'+
+        '<button class="btn ghost sm icononly modal-x" title="Cerrar">'+icon('cerrar')+'</button></div>'+
+      '<p class="desc">Elige una de tus clases de Google Classroom. Su alumnado se añadirá a la tabla (sin repetir); luego pulsa «Guardar curso».</p>'+
+      '<label class="fld"><span>Clase</span><select class="mc-sel" disabled><option>Cargando tus clases…</option></select></label>'+
+      '<p class="status mc-st"></p>'+
+      '<div class="modal-foot">'+
+        '<button class="btn ghost modal-cancel">Cancelar</button>'+
+        '<button class="btn primary modal-ok" disabled>'+icon('importar')+'Añadir alumnado</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  var sel = ov.querySelector('.mc-sel'), st = ov.querySelector('.mc-st'), ok = ov.querySelector('.modal-ok');
+  function cerrar(){ if(ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); }
+  function onKey(e){ if(e.key==='Escape') cerrar(); }
+  document.addEventListener('keydown', onKey);
+  ov.addEventListener('mousedown', function(e){ if(e.target===ov) cerrar(); });
+  ov.querySelector('.modal-x').onclick = cerrar;
+  ov.querySelector('.modal-cancel').onclick = cerrar;
+
+  function pintar(lista){
+    if(!lista.length){ sel.innerHTML = '<option>No tienes clases activas en Classroom</option>'; return; }
+    sel.innerHTML = lista.map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.nombre)+'</option>'; }).join('');
+    sel.disabled = false; ok.disabled = false; sel.focus();
+  }
+  if(CLASSROOM_CURSOS) pintar(CLASSROOM_CURSOS);
+  else google.script.run
+    .withSuccessHandler(function(l){ CLASSROOM_CURSOS = l || []; pintar(CLASSROOM_CURSOS); })
+    .withFailureHandler(function(e){ sel.innerHTML = '<option>—</option>'; setStatus(st, mensajeClassroom(e), 'err'); })
+    .getClassroomCursos();
+
+  ok.onclick = function(){
+    var clase = (CLASSROOM_CURSOS||[]).filter(function(c){ return c.id === sel.value; })[0];
+    if(!clase) return;
+    ok.disabled = true; setStatus(st, 'Trayendo el alumnado de «'+clase.nombre+'»…', 'busy');
+    google.script.run
+      .withSuccessHandler(function(lista){ cerrar(); onElegir(clase, lista || []); })
+      .withFailureHandler(function(e){ ok.disabled = false; setStatus(st, mensajeClassroom(e), 'err'); })
+      .getClassroomAlumnos(clase.id);
+  };
+}
+
+function mensajeClassroom(e){
+  var m = (e && e.message) ? e.message : String(e);
+  if(/Classroom is not defined|has not been used|disabled/i.test(m)) return 'La API de Google Classroom no está activada en este proyecto. Avisa al administrador.';
+  if(/permission|PERMISSION_DENIED|403/i.test(m)) return 'Classroom no ha dado permiso para leer tus clases. Vuelve a abrir la web y acepta los permisos de Classroom.';
+  return mensajeError(e);
+}
+</script>

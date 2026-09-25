@@ -9,6 +9,12 @@ Dos vistas según quién entra:
 
 - **Administrador** (se detecta solo en el primer despliegue) → asistente de
   configuración y gestión del claustro.
+- **Docente / tutor/a** → crea sus propios cursos (queda como tutor/a) y
+  gestiona su alumnado y el profesorado que los imparte (pestaña «Alumnado»).
+  Sincroniza siempre el claustro y, si quiere, los grupos de alumnos en los que
+  da clase (menú de «Sincronizar»).
+- **Alumnado** (incluido en algún curso) → sincroniza solo a sus compañeros,
+  su tutor/a y el profesorado de su clase.
 - **Profesorado** → sincroniza los contactos del centro y/o los suyos en **su**
   cuenta de Google Contacts, con opción diaria.
 
@@ -46,6 +52,8 @@ sola y se avisa por correo.
 | `Estado.gs` | **Almacén interno**: admin, configuración y lista del claustro |
 | `WebApp.gs` | `doGet` (3 estados) + API que llama el cliente |
 | `DatosCentral.gs` | Contactos del centro (almacén) y propios (por usuario) + parseo de pegado |
+| `Alumnado.gs` | Cursos/tutorías: roles tutor y alumno, contactos de clase |
+| `Classroom.gs` | Importar alumnado desde Google Classroom (clases del docente) |
 | `Grupos.gs` | Pertenencia al claustro (grupo de Google y/o lista) |
 | `Contactos.gs` | Núcleo People API: crear/actualizar/fusionar/traer/eliminar |
 | `SincronizacionDiaria.gs` | Disparador diario por usuario |
@@ -57,6 +65,7 @@ sola y se avisa por correo.
 | `Iconos.html` | Iconos SVG (estilo Lucide) |
 | `App.html` | Shell, navegación por pestañas y utilidades del cliente |
 | `MisContactos.html` | Pestaña de profesorado (todos): sincronizar y contactos propios |
+| `PestanaAlumnado.html` | Pestaña de cursos y alumnado (admin: todos, con filtro; tutor: el suyo) |
 | `Configuracion.html` | Pestaña de configuración del centro (solo admin) |
 | `ContactosCentro.html` | Pestaña del claustro / importación (solo admin) |
 
@@ -67,6 +76,13 @@ y oscuro, con iconos SVG (sin emojis):
 
 - **Mis contactos** (todos): sincronizar el centro por grupos, contactos
   propios, sincronización diaria y gestión de los contactos de Google.
+- **Alumnado** (admin y profesorado): cursos con su tutor/a, alumnado (editable,
+  importable desde Séneca o **directamente desde Google Classroom** eligiendo
+  la clase en un desplegable) y profesorado del curso. El nombre del curso es la
+  etiqueta del grupo. El admin ve todos, filtra por curso y asigna tutores.
+  Las bajas de alumnos (o cursos renombrados/borrados) retiran la etiqueta en
+  la siguiente sincronización de sus compañeros y profesorado.
+- La **sincronización diaria**, al activarse, hace también una subida inmediata.
 - **Configuración** (solo admin): centro (con verificación de código),
   especialidades, etiquetas y definición del claustro (grupo y/o lista).
 - **Contactos del centro** (solo admin): claustro editable e importación
@@ -82,17 +98,27 @@ En el primer uso, el admin entra directamente en «Configuración» (con aviso d
 pendiente). El correo del usuario se resuelve con `getEffectiveUser` como
 respaldo para que la detección del admin sea fiable en la web app.
 
+**Robustez y rendimiento (v4.1):**
+
+- Almacén troceado con lectura en una llamada, escritura atómica (sin quedar
+  vacío a medias), memoria por ejecución y bloqueo en todas las escrituras.
+- Sincronización con bloqueo por usuario, una sola lectura de contactos,
+  etiquetas paginadas, reintentos solo ante errores transitorios y lotes.
+- Validación en el servidor: correos del alumnado `@g.educaand.es`, profesorado
+  del claustro, nombres de curso que no choquen con etiquetas del claustro,
+  límites de tamaño y comprobación de espacio antes de guardar.
+
 **Pendiente / mejoras:**
 
-- Edición en línea de los contactos ya existentes en "Mis contactos de Google".
-- Si un claustro es muy grande, revisar límites del almacén (ya se trocea).
-- Exportar/backup del claustro fuera del proyecto.
+- El primer usuario que abre la web queda como administrador: abre tú la URL
+  justo después de desplegar.
+- Exportar/backup del almacén fuera del proyecto.
 
 ## Puesta en marcha (resumen)
 
 1. Copiar la plantilla (**proyecto standalone**) — cada admin la suya.
 2. Crear proyecto de Google Cloud **Interno** y enlazarlo (evita el aviso de
-   app no verificada). Habilitar People API.
+   app no verificada). Habilitar People API y Google Classroom API.
 3. Desplegar como **aplicación web**: ejecutar como *usuario que accede*, acceso
    *cualquier usuario de g.educaand.es*.
 4. Abrir la URL como admin → completar el **asistente**.
