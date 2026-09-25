@@ -32,11 +32,63 @@ function etqProfesorado_(nombreCurso) { return 'Profesorado ' + nombreCurso; }
 function low_(e) { return String(e || '').trim().toLowerCase(); }
 
 function leerCursos_() {
-  return leerTrozos_(PROP_ALUMNADO_PREFIJO, PROP_ALUMNADO_NUM, CACHE_ALUMNADO);
+  return (leerTrozos_(PROP_ALUMNADO_PREFIJO, PROP_ALUMNADO_NUM, CACHE_ALUMNADO) || []).map(desempaquetarCurso_);
 }
 
 function guardarCursos_(lista) {
-  guardarTrozos_(PROP_ALUMNADO_PREFIJO, PROP_ALUMNADO_NUM, CACHE_ALUMNADO, lista);
+  guardarTrozos_(PROP_ALUMNADO_PREFIJO, PROP_ALUMNADO_NUM, CACHE_ALUMNADO, (lista || []).map(empaquetarCurso_));
+}
+
+/* ------------------------ Formato compacto ------------------------ *
+ * Para que quepan centros grandes (1000+ alumnos) en el almacén interno, los
+ * datos se guardan compactos (≈ la mitad de espacio):
+ *  - claves de una letra y alumnos como arrays [nombre, apellidos, correo];
+ *  - el dominio «@g.educaand.es» se omite (se repone al leer);
+ *  - se quitan los valores vacíos del final.
+ * La lectura acepta también el formato antiguo (objetos), así que no hace
+ * falta migrar: se compacta solo al volver a guardar. */
+
+const DOMINIO_ = '@g.educaand.es';
+
+function empaquetarEmail_(e) {
+  e = low_(e);
+  return e.slice(-DOMINIO_.length) === DOMINIO_ ? e.slice(0, -DOMINIO_.length) : e;
+}
+
+function desempaquetarEmail_(e) {
+  e = String(e || '');
+  return e && e.indexOf('@') === -1 ? e + DOMINIO_ : e;
+}
+
+/** Quita los elementos vacíos del final de un array. */
+function recortar_(arr) {
+  while (arr.length && (arr[arr.length - 1] === '' || arr[arr.length - 1] == null)) arr.pop();
+  return arr;
+}
+
+function empaquetarCurso_(c) {
+  return {
+    i: c.id, n: c.nombre, t: empaquetarEmail_(c.tutor),
+    p: (c.profesores || []).map(empaquetarEmail_),
+    a: (c.alumnos || []).map(a => recortar_([a.nombre || '', a.apellidos || '', empaquetarEmail_(a.email)]))
+  };
+}
+
+function desempaquetarCurso_(c) {
+  if (!c || !c.a) return c;   // formato antiguo
+  return {
+    id: c.i, nombre: c.n, tutor: desempaquetarEmail_(c.t),
+    profesores: (c.p || []).map(desempaquetarEmail_),
+    alumnos: c.a.map(a => ({ nombre: a[0] || '', apellidos: a[1] || '', email: desempaquetarEmail_(a[2]) }))
+  };
+}
+
+/** Espacio usado del almacén interno (bytes aprox.) y límite (500 KB). */
+function usoAlmacen_() {
+  const props = PropertiesService.getScriptProperties().getProperties();
+  let bytes = 0;
+  Object.keys(props).forEach(k => { bytes += Utilities.newBlob(k + String(props[k])).getBytes().length; });
+  return { bytes: bytes, limite: 500 * 1024 };
 }
 
 /* ------------------------------ Roles ------------------------------ */
@@ -171,7 +223,11 @@ function cursosElegibles_(email) {
 
 function leerBajasAlumnado_() {
   const a = leerTrozos_(PROP_BAJAS_ALU_PREFIJO, PROP_BAJAS_ALU_NUM, CACHE_BAJAS_ALU);
-  return Array.isArray(a) ? a : [];
+  if (!Array.isArray(a)) return [];
+  // Compacto: [correo, [etiquetas], ts en segundos, 1 si era alumno/a]
+  return a.map(b => Array.isArray(b)
+    ? { email: desempaquetarEmail_(b[0]), grupos: b[1] || [], ts: (b[2] || 0) * 1000, alumno: !!b[3] }
+    : b);
 }
 
 /**
@@ -214,8 +270,9 @@ function registrarBajasCurso_(previo, nuevo) {
   const lista = Object.keys(bajas).filter(e => bajas[e].grupos.length)
     .map(e => ({ email: e, grupos: bajas[e].grupos, ts: bajas[e].ts, alumno: bajas[e].alumno || undefined }))
     .filter(b => (ahora - b.ts) < CADUCIDAD_BAJAS_)
-    .sort((a, b) => b.ts - a.ts).slice(0, 1000);
-  guardarTrozos_(PROP_BAJAS_ALU_PREFIJO, PROP_BAJAS_ALU_NUM, CACHE_BAJAS_ALU, lista);
+    .sort((a, b) => b.ts - a.ts).slice(0, 1500);
+  guardarTrozos_(PROP_BAJAS_ALU_PREFIJO, PROP_BAJAS_ALU_NUM, CACHE_BAJAS_ALU,
+    lista.map(b => recortar_([empaquetarEmail_(b.email), b.grupos, Math.round(b.ts / 1000), b.alumno ? 1 : ''])));
 }
 
 /* ------------------------------- API ------------------------------- */
@@ -229,7 +286,7 @@ function getAlumnado() {
   const claustro = leerContactosCentroStore_()
     .filter(c => c && c.email)
     .map(c => ({ nombre: c.nombre || '', apellidos: c.apellidos || '', email: low_(c.email), puesto: c.puesto || '' }));
-  return { esAdmin: admin, yo: low_(email), cursos: cursos, claustro: claustro };
+  return { esAdmin: admin, yo: low_(email), cursos: cursos, claustro: claustro, uso: admin ? usoAlmacen_() : null };
 }
 
 /**

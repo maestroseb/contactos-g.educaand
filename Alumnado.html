@@ -48,6 +48,11 @@ window.TABS.alumnado = {
       cont.querySelector('#aluDesc').innerHTML = DATA.esAdmin
         ? 'Ves todos los cursos del centro. Puedes crearlos, revisar sus nombres y asignar o cambiar su <b>tutor/a</b>. Cada docente también puede crear los suyos. El nombre del curso es la <b>etiqueta</b> de ese grupo. El alumnado, al entrar en la web, sincroniza solo a sus compañeros, a su tutor/a y al profesorado marcado (etiqueta «Profesorado &lt;curso&gt;»).'
         : 'Crea tus cursos (quedas como tutor/a), añade su alumnado y marca el profesorado que da clase en ellos. El nombre del curso es la <b>etiqueta</b> de ese grupo. Tu alumnado, al entrar en la web, sincronizará solo a sus compañeros, a ti y a ese profesorado. Para recibir tú los contactos de un grupo, márcalo en el menú de «Sincronizar».';
+      if(DATA.uso){
+        var kb = Math.round(DATA.uso.bytes/1024), lim = Math.round(DATA.uso.limite/1024), pct = Math.round(DATA.uso.bytes/DATA.uso.limite*100);
+        cont.querySelector('#aluDesc').innerHTML += '<br><span class="muted">Espacio usado del almacén: '+kb+' KB de '+lim+' KB ('+pct+' %).</span>'+
+          (pct >= 80 ? ' <b>Queda poco espacio.</b>' : '');
+      }
       var acc = cont.querySelector('#aluAcc');
       var cursos = DATA.cursos || [];
       var html = '';
