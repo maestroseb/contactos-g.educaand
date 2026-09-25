@@ -37,9 +37,12 @@ function getClassroomAlumnos(courseId) {
     });
     (r.students || []).forEach(s => {
       const p = s.profile || {}, n = p.name || {};
-      out.push({ nombre: n.givenName || '', apellidos: n.familyName || '', email: String(p.emailAddress || '').toLowerCase() });
+      let nombre = n.givenName || '', apellidos = n.familyName || '';
+      if (!apellidos && n.fullName) { const sp = separarNombre_(n.fullName); nombre = sp.nombre; apellidos = sp.apellidos; }
+      out.push({ nombre: nombre, apellidos: apellidos, email: String(p.emailAddress || '').toLowerCase() });
     });
     token = r.nextPageToken;
   } while (token);
-  return out;
+  return out.sort((a, b) => (a.apellidos || '\uffff').localeCompare(b.apellidos || '\uffff', 'es', { sensitivity: 'base' }) ||
+    a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
 }

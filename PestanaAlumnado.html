@@ -134,8 +134,8 @@ window.TABS.alumnado = {
         '<h3 style="margin:6px 0 8px;font-size:14px">Alumnado <span class="muted cNAlu"></span></h3>'+
         '<p class="desc">Con el <b>alias</b> (p. ej. el nombre en español de quien figura con otro nombre en Classroom) también aparecerá al buscar o autocompletar su correo.</p>'+
         '<div class="tablewrap"><table class="rejilla mis">'+
-          '<colgroup><col style="width:20%"><col style="width:26%"><col style="width:30%"><col style="width:18%"><col style="width:6%"></colgroup>'+
-          '<thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th title="Otro nombre con el que buscarlo (p. ej. su nombre en español). Se guarda como apodo del contacto.">Alias</th><th></th></tr></thead><tbody></tbody></table></div>'+
+          '<colgroup><col style="width:5%"><col style="width:18%"><col style="width:25%"><col style="width:29%"><col style="width:17%"><col style="width:6%"></colgroup>'+
+          '<thead><tr><th class="num-col">Nº</th><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th title="Otro nombre con el que buscarlo (p. ej. su nombre en español). Se guarda como apodo del contacto.">Alias</th><th></th></tr></thead><tbody></tbody></table></div>'+
         '<div class="row" style="margin-top:14px">'+
           '<button class="btn sm cAdd">'+icon('add')+'Añadir alumno/a</button>'+
           '<button class="btn primary sm cSave" style="margin-left:auto">'+icon('guardar')+'Guardar curso</button>'+
@@ -172,12 +172,14 @@ window.TABS.alumnado = {
       function fila(a){
         var tr = document.createElement('tr');
         tr.innerHTML =
+          '<td class="num-col"></td>'+
           '<td><input data-k="nombre" value="'+esc(a.nombre||'')+'"></td>'+
           '<td><input data-k="apellidos" value="'+esc(a.apellidos||'')+'"></td>'+
           '<td><input data-k="email" value="'+esc(a.email||'')+'"></td>'+
           '<td><input data-k="alias" placeholder="Otro nombre…" value="'+esc(a.alias||'')+'"></td>'+
           '<td class="act"><button class="btn danger sm icononly" title="Quitar">'+icon('borrar')+'</button></td>';
         tr.querySelector('.act button').onclick = function(){ tr.remove(); aplicarZebra(tb); contar(); };
+        tr.querySelector('input[data-k="apellidos"]').addEventListener('change', function(){ ordenarFilas(); aplicarZebra(tb); contar(); });
         tb.appendChild(tr);
       }
       function leerAlumnos(){
@@ -191,10 +193,15 @@ window.TABS.alumnado = {
         var tutor = tutorActual();
         card.querySelector('.cNProf').textContent = '('+(m.profesores.filter(function(e){ return e!==tutor; }).length + (tutor?1:0))+')';
         card.querySelector('.cNAlu').textContent = '('+leerAlumnos().length+')';
+        // Numeración de las filas (a la izquierda), según el orden visible.
+        Array.prototype.forEach.call(tb.querySelectorAll('tr'), function(tr, i){
+          var c = tr.querySelector('.num-col'); if(c) c.textContent = i + 1;
+        });
       }
 
       (m.alumnos||[]).forEach(fila);
       if(!tb.children.length) fila({});
+      ordenarFilas();   // también los ya guardados (por si venían sin ordenar)
       habilitarPegado(tb, function(t, o){ fila(o); });
       tb.addEventListener('input', contar);
       aplicarZebra(tb);
@@ -303,6 +310,7 @@ window.TABS.alumnado = {
           refrescarPop(out.cursosSync);
           if(nuevo) pintarCabecera();
           else { var o = cont.querySelector('#aluFiltro option[value="'+res.id+'"]'); if(o) o.textContent = res.nombre; }
+          ordenarFilas(); aplicarZebra(tb); contar();
           setStatus(cst, 'Curso guardado: '+res.alumnos.length+' alumnos/as'+(sinCorreo?' ('+sinCorreo+' sin correo: no podrán sincronizar)':'')+'.', sinCorreo?'err':'ok');
         });
       };
