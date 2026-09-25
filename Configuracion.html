@@ -27,16 +27,21 @@ function cursoEscolarHtml(ce){
   return '<div class="card" id="cursoCard">'+
     '<h2>'+icon('curso')+'Curso escolar '+esc(ce.actual)+
       ' <span class="badge'+(ce.abierto?' admin':'')+'" style="margin-left:6px">'+(ce.abierto?'Abierto':'Pendiente de abrir')+'</span></h2>'+
-    '<p class="desc">Cada año, en la <b>fecha de corte</b>, la sincronización de todo el mundo se cierra sola: se retiran las etiquetas del centro de sus contactos (se conservan en «Mis contactos»), el profesorado pierde los contactos de alumnado, se eliminan los cursos de alumnado y se desactiva la sincronización diaria. '+
+    '<div class="row" style="gap:20px;align-items:center;flex-wrap:wrap;margin-bottom:12px">'+
+    '<p class="desc" style="flex:1;min-width:280px;margin:0">Cada año, en la <b>fecha de corte</b>, la sincronización de todo el mundo se cierra sola: se retiran las etiquetas del centro de sus contactos (se conservan en «Mis contactos»), el profesorado pierde los contactos de alumnado, se eliminan los cursos de alumnado y se desactiva la sincronización diaria. '+
       'Después, un administrador revisa el claustro y <b>abre el nuevo curso</b>; entonces cada persona vuelve a activar su sincronización si quiere.</p>'+
+      '<div style="flex:none">'+
+        '<span style="display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin-bottom:6px">Fecha de corte</span>'+
+        '<div class="row" style="gap:8px;flex-wrap:nowrap">'+
+          '<select id="corteDia" style="width:auto" aria-label="Día">'+dias+'</select>'+
+          '<select id="corteMes" style="width:auto" aria-label="Mes">'+meses+'</select>'+
+          '<button class="btn" id="bCorte">'+icon('guardar')+'Guardar</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
     (ce.abierto ? '' :
       '<div class="callout warn" style="margin-bottom:12px">'+icon('alerta')+'<span>Antes de abrir, actualiza la lista en <b>Contactos del centro</b> (importa de Séneca: quien ya no esté quedará como baja) y revisa los administradores.</span></div>'+
       '<button class="btn primary" id="bAbrirCurso">'+icon('play')+'Abrir curso '+esc(ce.actual)+'</button>')+
-    '<div class="row" style="gap:10px;align-items:flex-end;margin-top:14px">'+
-      '<label class="fld" style="margin:0"><span>Fecha de corte · día</span><select id="corteDia" style="width:auto">'+dias+'</select></label>'+
-      '<label class="fld" style="margin:0"><span>mes</span><select id="corteMes" style="width:auto">'+meses+'</select></label>'+
-      '<button class="btn" id="bCorte">'+icon('guardar')+'Guardar fecha</button>'+
-    '</div>'+
     '<p class="status" id="sCurso"></p>'+
   '</div>';
 }
