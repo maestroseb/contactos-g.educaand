@@ -267,6 +267,17 @@
     border:1px solid var(--border-strong); border-radius:var(--r-pill); padding:6px 13px; transition:background .15s, border-color .15s}
   .chips label:hover{background:var(--surface-2)}
   .chips input{accent-color:var(--primary); cursor:pointer}
+  /* Profesorado marcado de un curso: fijo arriba y destacado */
+  .prof-sel{margin:4px 0 12px; padding:10px; border-radius:var(--r); background:var(--primary-soft); min-height:44px; align-items:center}
+  .chip-prof{display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--primary-ink);
+    background:var(--surface); border:1px solid var(--primary); border-radius:var(--r-pill); padding:5px 8px 5px 11px}
+  .chip-prof small{font-weight:500; color:var(--ink-faint)}
+  .chip-prof.tutor{background:var(--primary); color:#fff; border-color:var(--primary); padding-right:12px}
+  .chip-prof.tutor small{color:rgba(255,255,255,.85)}
+  .chip-prof .ico{width:14px; height:14px}
+  .chip-prof .x{display:inline-flex; border:none; background:none; padding:2px; margin-left:2px; cursor:pointer; color:inherit; border-radius:50%}
+  .chip-prof .x:hover{background:var(--primary-soft)}
+  .chip-prof .x svg{width:12px; height:12px}
   .chips label:focus-within{box-shadow:var(--ring); border-color:var(--primary)}
 
   /* ---------- Table ---------- */

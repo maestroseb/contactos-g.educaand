@@ -128,7 +128,8 @@ window.TABS.alumnado = {
               '<p class="desc" style="flex:2;min-width:220px"><b>Tutor/a:</b> '+esc(nombreDe(m.tutor))+'</p>'+
             '</div>')+
         '<h3 style="margin:6px 0 8px;font-size:14px">Profesorado del curso <span class="muted cNProf"></span></h3>'+
-        '<p class="desc">Marca el profesorado que da clase en este curso (el tutor/a se incluye siempre).</p>'+
+        '<p class="desc">Marca abajo el profesorado que da clase en este curso: aparecerá arriba, destacado (quítalo con «×»). El tutor/a se incluye siempre.</p>'+
+        '<div class="chips prof-sel cProfSel"></div>'+
         '<div class="cProfBusca"></div>'+
         '<div class="chips cProf" style="max-height:190px;overflow-y:auto;margin:8px 0 16px"></div>'+
         '<h3 style="margin:6px 0 8px;font-size:14px">Alumnado <span class="muted cNAlu"></span></h3>'+
@@ -147,27 +148,42 @@ window.TABS.alumnado = {
 
       function tutorActual(){ var s = card.querySelector('.cTutor'); return s ? s.value : m.tutor; }
 
+      /** Profesorado del curso: arriba, fijos y destacados, el tutor/a y los
+       *  marcados (con «×» para quitarlos); debajo, el resto del claustro para
+       *  añadir (con buscador). */
       function pintarProfes(){
         var tutor = tutorActual();
+        var porEmail = {};
+        (DATA.claustro||[]).forEach(function(p){ porEmail[p.email] = p; });
+        function txtDe(p){ return [p.nombre, p.apellidos].filter(Boolean).join(' ') || p.email; }
+        function chipSel(email, esTutor){
+          var p = porEmail[email] || { email: email };
+          return '<span class="chip-prof'+(esTutor?' tutor':'')+'" title="'+esc(email)+'">'+icon(esTutor?'curso':'ok')+
+            esc(txtDe(p))+(esTutor?' <small>Tutor/a</small>':(p.puesto?' <small>'+esc(p.puesto)+'</small>':''))+
+            (esTutor?'':'<button type="button" class="x" data-quitar="'+esc(email)+'" title="Quitar">'+cerrarSvg()+'</button>')+'</span>';
+        }
+        var marcados = m.profesores.filter(function(e){ return e !== tutor; })
+          .sort(function(a, b){ return txtDe(porEmail[a]||{email:a}).localeCompare(txtDe(porEmail[b]||{email:b}), 'es'); });
+        var sel = card.querySelector('.cProfSel');
+        sel.innerHTML = (tutor ? chipSel(tutor, true) : '') + marcados.map(function(e){ return chipSel(e, false); }).join('') ||
+          '<span class="muted">Aún no has marcado profesorado.</span>';
+        Array.prototype.forEach.call(sel.querySelectorAll('[data-quitar]'), function(b){
+          b.onclick = function(){ var i = m.profesores.indexOf(b.getAttribute('data-quitar')); if(i !== -1) m.profesores.splice(i, 1); pintarProfes(); };
+        });
+
         var box = card.querySelector('.cProf');
-        var lista = (DATA.claustro||[]).filter(function(p){ return p.email !== tutor; });
+        var lista = (DATA.claustro||[]).filter(function(p){ return p.email !== tutor && m.profesores.indexOf(p.email) === -1; });
         box.innerHTML = lista.length ? lista.map(function(p){
-          var marc = m.profesores.indexOf(p.email) !== -1;
-          var txt = [p.nombre, p.apellidos].filter(Boolean).join(' ') || p.email;
-          var vis = coincideBusqueda([txt, p.email, p.puesto].join(' '), busqProf);
-          return '<label'+(vis?'':' hidden')+' title="'+esc(p.email)+'"><input type="checkbox" value="'+esc(p.email)+'"'+(marc?' checked':'')+'> '+
-            esc(txt)+(p.puesto?' <span class="muted">· '+esc(p.puesto)+'</span>':'')+'</label>';
-        }).join('') : '<p class="muted">El claustro está vacío.</p>';
+          var vis = coincideBusqueda([txtDe(p), p.email, p.puesto].join(' '), busqProf);
+          return '<label'+(vis?'':' hidden')+' title="'+esc(p.email)+'"><input type="checkbox" value="'+esc(p.email)+'"> '+
+            esc(txtDe(p))+(p.puesto?' <span class="muted">· '+esc(p.puesto)+'</span>':'')+'</label>';
+        }).join('') : '<p class="muted">'+((DATA.claustro||[]).length ? 'Todo el claustro está marcado.' : 'El claustro está vacío.')+'</p>';
         Array.prototype.forEach.call(box.querySelectorAll('input[type=checkbox]'), function(ch){
-          ch.onchange = function(){
-            var i = m.profesores.indexOf(ch.value);
-            if(ch.checked && i === -1) m.profesores.push(ch.value);
-            if(!ch.checked && i !== -1) m.profesores.splice(i, 1);
-            contar();
-          };
+          ch.onchange = function(){ if(m.profesores.indexOf(ch.value) === -1) m.profesores.push(ch.value); pintarProfes(); };
         });
         contar();
       }
+
 
       function fila(a){
         var tr = document.createElement('tr');
