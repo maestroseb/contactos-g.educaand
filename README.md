@@ -65,7 +65,7 @@ sola y se avisa por correo.
 | `Iconos.html` | Iconos SVG (estilo Lucide) |
 | `App.html` | Shell, navegación por pestañas y utilidades del cliente |
 | `MisContactos.html` | Pestaña de profesorado (todos): sincronizar y contactos propios |
-| `Alumnado.html` | Pestaña de cursos y alumnado (admin: todos, con filtro; tutor: el suyo) |
+| `PestanaAlumnado.html` | Pestaña de cursos y alumnado (admin: todos, con filtro; tutor: el suyo) |
 | `Configuracion.html` | Pestaña de configuración del centro (solo admin) |
 | `ContactosCentro.html` | Pestaña del claustro / importación (solo admin) |
 
