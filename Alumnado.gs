@@ -16,7 +16,7 @@
  *    retirados) se anotan para retirar esas etiquetas al sincronizar.
  *
  * Formato de cada curso:
- *   { id, nombre, tutor: email, profesores: [email], alumnos: [{nombre, apellidos, email}] }
+ *   { id, nombre, tutor: email, profesores: [email], alumnos: [{nombre, apellidos, email, alias}] }
  */
 
 const PROP_ALUMNADO_PREFIJO = 'alumnado_';
@@ -72,7 +72,7 @@ function empaquetarCurso_(c) {
   return {
     i: c.id, n: c.nombre, t: empaquetarEmail_(c.tutor),
     p: (c.profesores || []).map(empaquetarEmail_),
-    a: (c.alumnos || []).map(a => recortar_([a.nombre || '', a.apellidos || '', empaquetarEmail_(a.email)]))
+    a: (c.alumnos || []).map(a => recortar_([a.nombre || '', a.apellidos || '', empaquetarEmail_(a.email), a.alias || '']))
   };
 }
 
@@ -81,7 +81,7 @@ function desempaquetarCurso_(c) {
   return {
     id: c.i, nombre: c.n, tutor: desempaquetarEmail_(c.t),
     profesores: (c.p || []).map(desempaquetarEmail_),
-    alumnos: c.a.map(a => ({ nombre: a[0] || '', apellidos: a[1] || '', email: desempaquetarEmail_(a[2]) }))
+    alumnos: c.a.map(a => ({ nombre: a[0] || '', apellidos: a[1] || '', email: desempaquetarEmail_(a[2]), alias: a[3] || '' }))
   };
 }
 
@@ -152,7 +152,7 @@ function contactosDeClase_(email) {
   cursosDeAlumno_(yo).forEach(curso => {
     (curso.alumnos || []).forEach(a => {
       if (!a.email || low_(a.email) === yo) return;
-      out.push({ nombre: a.nombre || '', apellidos: a.apellidos || '', email: low_(a.email), grupos: [curso.nombre], alumno: true });
+      out.push({ nombre: a.nombre || '', apellidos: a.apellidos || '', alias: a.alias || '', email: low_(a.email), grupos: [curso.nombre], alumno: true });
     });
     const tutor = low_(curso.tutor);
     [tutor].concat((curso.profesores || []).map(low_)).filter(String).forEach(e => {
@@ -180,7 +180,7 @@ function contactosDeCursosDocente_(email) {
   permitidos.filter(c => sel.indexOf(c.id) !== -1).forEach(curso => {
     (curso.alumnos || []).forEach(a => {
       if (!a.email || low_(a.email) === yo) return;
-      out.push({ nombre: a.nombre || '', apellidos: a.apellidos || '', email: low_(a.email), grupos: [curso.nombre], alumno: true });
+      out.push({ nombre: a.nombre || '', apellidos: a.apellidos || '', alias: a.alias || '', email: low_(a.email), grupos: [curso.nombre], alumno: true });
     });
   });
   return fusionarPorEmail_(out);
@@ -347,12 +347,12 @@ function guardarCurso(curso) {
 
   const aluSet = {}, alumnos = [], invalidos = [];
   (curso.alumnos || []).forEach(a => {
-    const e = low_(a && a.email), n = t(a && a.nombre), ap = t(a && a.apellidos);
+    const e = low_(a && a.email), n = t(a && a.nombre), ap = t(a && a.apellidos), al = t(a && a.alias);
     if (!e && !n && !ap) return;
     if (e && !RE_ALUMNO_.test(e)) { invalidos.push(e); return; }
     if (e && aluSet[e]) return;
     if (e) aluSet[e] = true;
-    alumnos.push({ nombre: n, apellidos: ap, email: e });
+    alumnos.push(al ? { nombre: n, apellidos: ap, email: e, alias: al } : { nombre: n, apellidos: ap, email: e });
   });
   if (invalidos.length) {
     throw new Error('Correos no válidos (deben ser @g.educaand.es): ' + invalidos.slice(0, 5).join(', ') + (invalidos.length > 5 ? '…' : ''));

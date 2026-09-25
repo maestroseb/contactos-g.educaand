@@ -132,9 +132,10 @@ window.TABS.alumnado = {
         '<div class="cProfBusca"></div>'+
         '<div class="chips cProf" style="max-height:190px;overflow-y:auto;margin:8px 0 16px"></div>'+
         '<h3 style="margin:6px 0 8px;font-size:14px">Alumnado <span class="muted cNAlu"></span></h3>'+
+        '<p class="desc">Con el <b>alias</b> (p. ej. el nombre en español de quien figura con otro nombre en Classroom) también aparecerá al buscar o autocompletar su correo.</p>'+
         '<div class="tablewrap"><table class="rejilla mis">'+
-          '<colgroup><col style="width:25%"><col style="width:32%"><col style="width:37%"><col style="width:6%"></colgroup>'+
-          '<thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th></th></tr></thead><tbody></tbody></table></div>'+
+          '<colgroup><col style="width:20%"><col style="width:26%"><col style="width:30%"><col style="width:18%"><col style="width:6%"></colgroup>'+
+          '<thead><tr><th>Nombre</th><th>Apellidos</th><th>E-mail</th><th title="Otro nombre con el que buscarlo (p. ej. su nombre en español). Se guarda como apodo del contacto.">Alias</th><th></th></tr></thead><tbody></tbody></table></div>'+
         '<div class="row" style="margin-top:14px">'+
           '<button class="btn sm cAdd">'+icon('add')+'Añadir alumno/a</button>'+
           '<button class="btn primary sm cSave" style="margin-left:auto">'+icon('guardar')+'Guardar curso</button>'+
@@ -174,6 +175,7 @@ window.TABS.alumnado = {
           '<td><input data-k="nombre" value="'+esc(a.nombre||'')+'"></td>'+
           '<td><input data-k="apellidos" value="'+esc(a.apellidos||'')+'"></td>'+
           '<td><input data-k="email" value="'+esc(a.email||'')+'"></td>'+
+          '<td><input data-k="alias" placeholder="Otro nombre…" value="'+esc(a.alias||'')+'"></td>'+
           '<td class="act"><button class="btn danger sm icononly" title="Quitar">'+icon('borrar')+'</button></td>';
         tr.querySelector('.act button').onclick = function(){ tr.remove(); aplicarZebra(tb); contar(); };
         tb.appendChild(tr);
@@ -215,7 +217,7 @@ window.TABS.alumnado = {
           var e = String(c.email||'').toLowerCase();
           if(e && ya[e]) return;
           if(e) ya[e] = true;
-          fila({ nombre:c.nombre, apellidos:c.apellidos, email:e }); n++;
+          fila({ nombre:c.nombre, apellidos:c.apellidos, email:e, alias:c.alias||'' }); n++;
         });
         aplicarZebra(tb); contar();
         return n;
@@ -253,7 +255,7 @@ window.TABS.alumnado = {
         var al = leerAlumnos();
         if(!al.length){ setStatus(cst, 'No hay alumnado que descargar.', 'err'); return; }
         descargarCSV('alumnado-'+(m.nombre||'curso').replace(/[^\wÀ-ÿ-]+/g,'_')+'.csv',
-          [['Nombre','Apellidos','E-mail']].concat(al.map(function(a){ return [a.nombre, a.apellidos, a.email]; })));
+          [['Nombre','Apellidos','E-mail','Alias']].concat(al.map(function(a){ return [a.nombre, a.apellidos, a.email, a.alias||'']; })));
       };
 
       var bDel = card.querySelector('.cDel');
